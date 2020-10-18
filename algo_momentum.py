@@ -88,6 +88,7 @@ for position in api.list_positions():
         #    type='market',
         #    qty=position['qty'],
         #)
+        pass
     else:
         kept_positions.append(position['symbol'])
 
