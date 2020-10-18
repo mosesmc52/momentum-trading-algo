@@ -7,7 +7,7 @@ declare -p | grep -Ev 'BASHOPTS|BASH_VERSINFO|EUID|PPID|SHELLOPTS|UID' > /contai
 
 echo "start" >> /var/log/cron.log 2>&1
 
-# Setup a cron schedule
+# Setup a cron schedule to run 1st of every month
 echo "SHELL=/bin/bash
 BASH_ENV=/container.env
 0 0 1 * * python ./algo_momentum.py >> /var/log/cron.log 2>&1
