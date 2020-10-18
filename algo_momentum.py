@@ -37,6 +37,7 @@ config.read('algo_settings.cfg')
 market_history = history(db_session = db_session, tickers = [config['model']['market']],  days = config['model']['trend_window_days'])
 cash_history = history(db_session = db_session, tickers = [config['model']['cash']],  days = config['model']['trend_window_days'])
 
+
 is_bull_market =  (market_history['close'].tail(1).iloc[0] > market_history['close'].mean()) and (TMOM(market_history['close']) > TMOM(cash_history['close']))
 if is_bull_market:
     log('Bull Market', 'success')
@@ -108,7 +109,7 @@ new_portfolio = pd.concat(
 # calculate equity inverse volatility
 position_volatility = pd.DataFrame(columns=['ticker', 'volatility'])
 for ticker, _ in new_portfolio.iterrows():
-    equity_history = history(db_session = db_session, tickers = [ticker],  days = int(config['model']['hist_window_days']))
+    equity_history = history(db_session = db_session, tickers = [ticker],  days = DAYS_IN_YEAR)
 
     position_volatility = position_volatility.append({
                 'ticker': ticker,
@@ -170,10 +171,10 @@ if market_weight:
 
 # if not bull market invest in cash
 if round(market_weight, 3) < 1.0 and not is_bull_market:  # this section manages bear market
-    gld_history = history(db_session = db_session, tickers = config['model']['gold'],  days=hist_market_window_days)
+    gld_history = history(db_session = db_session, tickers = config['model']['gold'],  days=config['model']['trend_window_days'])
     weight = 1.0 - market_weight
     if (TMOM(gld_history['close']) > TMOM(cash_history['close'])) and (gld_history['close'].tail(1).iloc[0] > gld_history['close'].mean()):
-        print('gold [%s]' % ( weight ))
+        print('gold weight: %s' % ( weight ))
         price = gld_history.tail(1)['close'][0]
         qty = share_quantity(price = price, weight = weight,portfolio_value = portfolio_value)
         # buy gold
@@ -186,8 +187,8 @@ if round(market_weight, 3) < 1.0 and not is_bull_market:  # this section manages
                 qty=qty,
             )
     else:
-        cash_history = history(db_session = db_session, tickers = config['model']['cash'],  days=hist_market_window_days)
-        print('cash [%s]' % ( weight ))
+        cash_history = history(db_session = db_session, tickers = config['model']['cash'],  days=config['model']['trend_window_days'])
+        print('cash weight: %s' % ( weight ))
         price = cash_history.tail(1)['close'][0]
         qty = share_quantity(price = price, weight = weight,portfolio_value = portfolio_value)
         # buy cash
