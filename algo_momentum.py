@@ -19,7 +19,7 @@ DAYS_IN_YEAR = 365
 # initialize Alpaca Trader
 api = tradeapi.REST(os.getenv('ALPACA_KEY_ID'), os.getenv('ALPACA_SECRET_KEY'), base_url=os.getenv('ALPACA_BASE_URL')) # or use ENV Vars shown below
 account = api.get_account()
-
+current_positions = [position['symbol'] for position in api.list_positions()]
 
 # open sqllite db
 engine = sqlalchemy.create_engine('sqlite:///securities.db')
@@ -51,9 +51,8 @@ for _, company in companies.iterrows():
         log('{0}, no data'.format(company['Symbol']))
         continue
 
-
     inf_discr, is_quality = momentum_quality(equity_history['close'], min_inf_discr = config['model']['min_inf_discr'])
-    if not is_quality:
+    if not is_quality and company['Symbol'] not in current_positions:
         log('{0}, quality failed'.format(company['Symbol']))
         continue
 
@@ -62,7 +61,7 @@ for _, company in companies.iterrows():
     momentum_start = -1 * (int(config['model']['score_window_days']) + int(config['model']['score_exclude_days']))
     momentum_hist = equity_history[momentum_start:data_end]
     score = momentum_score(equity_history['close']).mean()
-    if score <= float(config['model']['minimum_score_momentum']):
+    if score <= float(config['model']['minimum_score_momentum']) and company['Symbol'] not in current_positions:
         log('{0}, score {0} less than minimum'.format(company['Symbol'], score))
         continue
 
@@ -75,7 +74,6 @@ mom_equities = mom_equities.set_index(['ticker'])
 ranking_table = mom_equities.sort_values(by=['inf_discr', 'score'], ascending=[True, False])
 print('ticker count: {0}'.format(len(ranking_table)))
 print(ranking_table)
-
 
 # https://github.com/alpacahq/alpaca-trade-api-python
 kept_positions =  []
@@ -92,7 +90,6 @@ for position in api.list_positions():
         pass
     else:
         kept_positions.append(position['symbol'])
-
 
 replacement_stocks = int(config['model']['portfolio_size']) - len(kept_positions)
 
