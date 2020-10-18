@@ -1,7 +1,7 @@
 """
 Helper functions.
 """
-
+import math
 import time
 from datetime import datetime, timedelta
 
@@ -201,3 +201,6 @@ def history(db_session, tickers, days):
 
 def TMOM(prices_df):
     return prices_df.pct_change().cumsum().tail(1)[0]
+
+def share_quantity(price, weight, portfolio_value):
+    return math.floor( (portfolio_value * weight) / price)
