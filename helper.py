@@ -4,8 +4,11 @@ Helper functions.
 
 import time
 from datetime import datetime, timedelta
+
 import numpy as np
+from scipy import stats
 import pandas as pd
+
 
 import sqlalchemy
 import models
@@ -113,7 +116,7 @@ def _pos_neg( pct_change):
     else:
         return 0
 
-def momentum_quality( ts ):
+def momentum_quality( ts, min_inf_discr = 0.0):
     # use momentum quality calculation
 
     df = pd.DataFrame()
@@ -122,6 +125,7 @@ def momentum_quality( ts ):
     df['return'] = ts.resample('M').last().pct_change()[-lookback_months:-1]
     df['pos_neg'] = df.apply(lambda row: _pos_neg(row['return']) ,axis=1)
     df['pos_sum'] = df['pos_neg'].cumsum()
+
     positive_sum = df['pos_sum'].iloc[-1]
     consist_indicator = df['pos_sum'].iloc[-1] >= lookback_months * 2 / 3
 
@@ -137,11 +141,10 @@ def momentum_quality( ts ):
 
     pret = ((df['return']+1).cumprod()-1).iloc[-1]
     inf_discr =  np.sign(pret) * perc_diff
+    if inf_discr < float(min_inf_discr) and consist_indicator:
+        return inf_discr, True
 
-    if inf_discr < min_inf_discr and consist_indicator:
-        return pd.Series([inf_discr, True])
-
-    return pd.Series([inf_discr, False])
+    return inf_discr, False
 
 
 def momentum_score(ts):
@@ -162,11 +165,11 @@ def momentum_score(ts):
     score = annualized_slope * (r_value ** 2)
     return score
 
-def volatility(ts):
+def volatility(ts, vola_window = 20):
     return ts.pct_change().rolling(vola_window).std().mean()
 
 
-def history(db_session, tickers, bar_count):
+def history(db_session, tickers, days):
 
     # build sqlite queries
     security_query = db_session.query(models.Security).filter(models.Security.ticker.in_(tuple(tickers)))
@@ -175,7 +178,7 @@ def history(db_session, tickers, bar_count):
     for security in security_query.all():
         security_ids.append(security.id)
 
-    past = datetime.now() - timedelta(days = int(bar_count))
+    past = datetime.now() - timedelta(days = int(days))
     price_query = db_session.query(models.Price).filter(models.Price.security_id.in_(tuple(security_ids)), models.Price.date >= past)
 
     # build pandas dataframe
