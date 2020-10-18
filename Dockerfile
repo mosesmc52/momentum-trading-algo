@@ -1,5 +1,4 @@
-FROM python:2.7.17
-
+FROM python:3.7.9
 
 # to the terminal with out buffering it first
 ENV PYTHONUNBUFFERED 1
