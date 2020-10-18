@@ -10,11 +10,14 @@ import sqlalchemy
 from dotenv import load_dotenv, find_dotenv
 load_dotenv(find_dotenv())
 
-from helper import (share_quantity, momentum_quality, momentum_score, volatility, history, TMOM )
+from helper import (str2bool, share_quantity, momentum_quality, momentum_score, volatility, history, TMOM )
 from log import log
 
 # constants
 DAYS_IN_YEAR = 365
+
+# live trade
+LIVE_TRADE = str2bool(os.getenv('LIVE_TRADE', False))
 
 # initialize Alpaca Trader
 api = tradeapi.REST(os.getenv('ALPACA_KEY_ID'), os.getenv('ALPACA_SECRET_KEY'), base_url=os.getenv('ALPACA_BASE_URL')) # or use ENV Vars shown below
@@ -81,13 +84,14 @@ kept_positions =  []
 for position in api.list_positions():
     if (position['symbol'] in ['IEF', 'GLD']) or \
         ( position['symbol'] not in mom_equities.index.tolist() and today.month in [3, 6, 9, 12]):
-        api.submit_order(
-            symbol=position['symbol'],
-            time_in_force='day',
-            side='sell',
-            type='market',
-            qty=position['qty'],
-        )
+        if LIVE_TRADE:
+            api.submit_order(
+                symbol=position['symbol'],
+                time_in_force='day',
+                side='sell',
+                type='market',
+                qty=position['qty'],
+            )
     else:
         kept_positions.append(position['symbol'])
 
@@ -128,13 +132,14 @@ for security, data in position_volatility.iterrows():
     if security in kept_positions:
         qty = share_quantity(price = data['price'], weight = data['weight'],portfolio_value = portfolio_value)
         if qty:
-            api.submit_order(
-                symbol=security,
-                time_in_force='day',
-                side='buy',
-                type='market',
-                qty=qty,
-            )
+            if LIVE_TRADE:
+                api.submit_order(
+                    symbol=security,
+                    time_in_force='day',
+                    side='buy',
+                    type='market',
+                    qty=qty,
+                )
             market_weight += data['weight']
             log('{0}: {1}'.format(security, qty), 'info')
             positions+= 1
@@ -143,13 +148,14 @@ for security, data in position_volatility.iterrows():
     elif is_bull_market:
             qty = share_quantity(price = data['price'], weight = data['weight'],portfolio_value = portfolio_value)
             if qty:
-                api.submit_order(
-                    symbol=security,
-                    time_in_force='day',
-                    side='buy',
-                    type='market',
-                    qty=qty,
-                )
+                if LIVE_TRADE:
+                    api.submit_order(
+                        symbol=security,
+                        time_in_force='day',
+                        side='buy',
+                        type='market',
+                        qty=qty,
+                    )
                 market_weight += data['weight']
                 log('{0}: {1}'.format(security, qty), 'info')
                 positions+= 1
@@ -171,25 +177,27 @@ if round(market_weight, 3) < 1.0 and not is_bull_market:  # this section manages
         price = gld_history.tail(1)['close'][0]
         qty = share_quantity(price = price, weight = weight,portfolio_value = portfolio_value)
         # buy gold
-        api.submit_order(
-            symbol=config['model']['gold'],
-            time_in_force='day',
-            side='buy',
-            type='market',
-            qty=qty,
-        )
+        if LIVE_TRADE:
+            api.submit_order(
+                symbol=config['model']['gold'],
+                time_in_force='day',
+                side='buy',
+                type='market',
+                qty=qty,
+            )
     else:
         cash_history = history(db_session = db_session, tickers = config['model']['cash'],  days=hist_market_window_days)
         print('cash [%s]' % ( weight ))
         price = cash_history.tail(1)['close'][0]
         qty = share_quantity(price = price, weight = weight,portfolio_value = portfolio_value)
         # buy cash
-        api.submit_order(
-            symbol=config['model']['cash'],
-            time_in_force='day',
-            side='buy',
-            type='market',
-            qty=qty,
-        )
+        if LIVE_TRADE:
+            api.submit_order(
+                symbol=config['model']['cash'],
+                time_in_force='day',
+                side='buy',
+                type='market',
+                qty=qty,
+            )
 
 # Email Positions
