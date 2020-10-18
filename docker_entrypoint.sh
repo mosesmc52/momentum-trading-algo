@@ -1,0 +1,20 @@
+#!/bin/bash
+
+# Start the run once job.
+echo "Scrappy Docker container has been started"
+
+declare -p | grep -Ev 'BASHOPTS|BASH_VERSINFO|EUID|PPID|SHELLOPTS|UID' > /container.env
+
+echo "start" >> /var/log/cron.log 2>&1
+
+# Setup a cron schedule
+echo "SHELL=/bin/bash
+BASH_ENV=/container.env
+0 0 1 * * python ./algo_momentum.py >> /var/log/cron.log 2>&1
+# This extra line makes it a valid cron" > scheduler.txt
+
+crontab scheduler.txt
+cron
+
+touch /var/log/cron.log
+echo "running....."
