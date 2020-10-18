@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Start the run once job.
-echo "Scrappy Docker container has been started"
+echo "Momentum Algo Docker container has been started"
 
 declare -p | grep -Ev 'BASHOPTS|BASH_VERSINFO|EUID|PPID|SHELLOPTS|UID' > /container.env
 
