@@ -22,7 +22,7 @@ LIVE_TRADE = str2bool(os.getenv('LIVE_TRADE', False))
 # initialize Alpaca Trader
 api = tradeapi.REST(os.getenv('ALPACA_KEY_ID'), os.getenv('ALPACA_SECRET_KEY'), base_url=os.getenv('ALPACA_BASE_URL')) # or use ENV Vars shown below
 account = api.get_account()
-current_positions = [position['symbol'] for position in api.list_positions()]
+current_positions = [position.symbol for position in api.list_positions()]
 
 
 # open sqllite db
@@ -83,18 +83,19 @@ print(ranking_table)
 
 kept_positions =  []
 for position in api.list_positions():
-    if (position['symbol'] in ['IEF', 'GLD']) or \
-        ( position['symbol'] not in mom_equities.index.tolist() and today.month in [3, 6, 9, 12]):
+    if (position.symbol in ['IEF', 'GLD']) or \
+        ( position.symbol not in mom_equities.index.tolist() and today.month in [3, 6, 9, 12]):
         if LIVE_TRADE:
             api.submit_order(
-                symbol=position['symbol'],
+                symbol=position.symbol,
                 time_in_force='day',
                 side='sell',
                 type='market',
-                qty=position['qty'],
+                qty=position.qty,
             )
+        log('drop postion {0}'.format(position.symbol), 'info')
     else:
-        kept_positions.append(position['symbol'])
+        kept_positions.append(position.symbol)
 
 replacement_stocks = int(config['model']['portfolio_size']) - len(kept_positions)
 
