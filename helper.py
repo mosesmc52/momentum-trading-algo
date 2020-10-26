@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 import numpy as np
 from scipy import stats
 import pandas as pd
-
+from intrinio_sdk.rest import ApiException
 
 import sqlalchemy
 import models
@@ -108,6 +108,10 @@ def ingest_security(intrinio_security, db_session, ticker, name = '', type = 'st
 
     # retrieve price history since latest price
     hist = price_history(intrinio_security, ticker, start_date, end_date)
+    if not len(hist):
+        log('No History found since {0}'.format(last_price.date.strftime('%m-%d-%Y')), 'info')
+        time.sleep(1)
+        return True
 
     # save to database
     for _, price in hist.sort_values(by = 'date', ascending = True).iterrows():

@@ -10,6 +10,12 @@ import sqlalchemy
 from dotenv import load_dotenv, find_dotenv
 load_dotenv(find_dotenv())
 
+import sentry_sdk
+from sentry_sdk import capture_exception
+
+# find on https://docs.sentry.io/error-reporting/quickstart/?platform=python
+sentry_sdk.init(dsn=os.getenv('SENTRY_DSN'))
+
 from helper import (str2bool, share_quantity, momentum_quality, momentum_score, volatility, history, TMOM )
 from log import log
 
