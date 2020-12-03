@@ -89,7 +89,7 @@ print(ranking_table)
 
 kept_positions =  []
 for position in api.list_positions():
-    if (position.symbol in ['IEF', 'GLD']) or \
+    if (position.symbol in ['IEF', 'GLD'] and is_bull_market) or \
         ( position.symbol not in mom_equities.index.tolist() and today.month in [3, 6, 9, 12]):
         if LIVE_TRADE:
             api.submit_order(
@@ -139,15 +139,29 @@ for security, data in position_volatility.iterrows():
 
     if security in kept_positions:
         qty = share_quantity(price = data['price'], weight = data['weight'],portfolio_value = portfolio_value)
+
         if qty:
             if LIVE_TRADE:
-                api.submit_order(
-                    symbol=security,
-                    time_in_force='day',
-                    side='buy',
-                    type='market',
-                    qty=qty,
-                )
+                # check quanity for existing position
+                diff = qty - int(api.get_position(security).qty)
+
+                # buy or sell the difference
+                if diff > 0:
+                    api.submit_order(
+                        symbol=security,
+                        time_in_force='day',
+                        side='buy',
+                        type='market',
+                        qty=diff,
+                    )
+                elif diff < 0:
+                    api.submit_order(
+                        symbol=security,
+                        time_in_force='day',
+                        side='sell',
+                        type='market',
+                        qty=abs(diff),
+                    )
             market_weight += data['weight']
             log('{0}: {1}'.format(security, qty), 'info')
             positions+= 1
@@ -186,26 +200,82 @@ if round(market_weight, 3) < 1.0 and not is_bull_market:  # this section manages
         qty = share_quantity(price = price, weight = weight,portfolio_value = portfolio_value)
         # buy gold
         if LIVE_TRADE:
+            if config['model']['gold'] in current_positions:
+                # check quanity for existing position
+                diff = qty - int(api.get_position(config['model']['gold']).qty)
+
+                # buy or sell the difference
+                if diff > 0:
+                    api.submit_order(
+                        symbol=config['model']['gold'],
+                        time_in_force='day',
+                        side='buy',
+                        type='market',
+                        qty=diff,
+                    )
+                elif diff < 0:
+                    api.submit_order(
+                        symbol=config['model']['gold'],
+                        time_in_force='day',
+                        side='sell',
+                        type='market',
+                        qty=abs(diff),
+                    )
+            else:
+                api.submit_order(
+                    symbol=config['model']['gold'],
+                    time_in_force='day',
+                    side='buy',
+                    type='market',
+                    qty=qty,
+                )
+    else:
+        # if position in gold, sell 
+        if config['model']['gold'] in current_positions:
+            qty = api.get_position(config['model']['gold']).qty
             api.submit_order(
                 symbol=config['model']['gold'],
                 time_in_force='day',
-                side='buy',
+                side='sell',
                 type='market',
-                qty=qty,
+                qty=abs(diff),
             )
-    else:
+
+        # insert in cash
         cash_history = history(db_session = db_session, tickers = config['model']['cash'],  days=config['model']['trend_window_days'])
         print('cash weight: %s' % ( weight ))
         price = cash_history.tail(1)['close'][0]
         qty = share_quantity(price = price, weight = weight,portfolio_value = portfolio_value)
         # buy cash
         if LIVE_TRADE:
-            api.submit_order(
-                symbol=config['model']['cash'],
-                time_in_force='day',
-                side='buy',
-                type='market',
-                qty=qty,
-            )
+            if config['model']['cash'] in current_positions:
+                # check quanity for existing position
+                diff = qty - int(api.get_position(config['model']['cash']).qty)
+
+                # buy or sell the difference
+                if diff > 0:
+                    api.submit_order(
+                        symbol=config['model']['cash'],
+                        time_in_force='day',
+                        side='buy',
+                        type='market',
+                        qty=diff,
+                    )
+                elif diff < 0:
+                    api.submit_order(
+                        symbol=config['model']['cash'],
+                        time_in_force='day',
+                        side='sell',
+                        type='market',
+                        qty=abs(diff),
+                    )
+            else:
+                api.submit_order(
+                    symbol=config['model']['cash'],
+                    time_in_force='day',
+                    side='buy',
+                    type='market',
+                    qty=qty,
+                )
 
 # Email Positions

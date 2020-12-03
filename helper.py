@@ -98,7 +98,7 @@ def ingest_security(intrinio_security, db_session, ticker, name = '', type = 'st
         start_date = now - timedelta( days = 730)
     else:
         # retrieve latest price data from sql database
-        last_price = db_session.query(models.Price).order_by(sqlalchemy.desc('date')).first()
+        last_price = db_session.query(models.Price).filter( models.Price.security_id == security.id).order_by(sqlalchemy.desc('date')).first()
         if not last_price:
             start_date = now - timedelta( days = 730)
         else:
