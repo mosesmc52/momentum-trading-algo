@@ -200,6 +200,16 @@ if round(market_weight, 3) < 1.0 and not is_bull_market:  # this section manages
         qty = share_quantity(price = price, weight = weight,portfolio_value = portfolio_value)
         # buy gold
         if LIVE_TRADE:
+            # if position in cash, sell
+            if config['model']['cash'] in current_positions:
+                api.submit_order(
+                    symbol=config['model']['cash'],
+                    time_in_force='day',
+                    side='sell',
+                    type='market',
+                    qty=api.get_position(config['model']['cash']).qty,
+                )
+
             if config['model']['gold'] in current_positions:
                 # check quanity for existing position
                 diff = qty - int(api.get_position(config['model']['gold']).qty)
@@ -230,17 +240,6 @@ if round(market_weight, 3) < 1.0 and not is_bull_market:  # this section manages
                     qty=qty,
                 )
     else:
-        # if position in gold, sell 
-        if config['model']['gold'] in current_positions:
-            qty = api.get_position(config['model']['gold']).qty
-            api.submit_order(
-                symbol=config['model']['gold'],
-                time_in_force='day',
-                side='sell',
-                type='market',
-                qty=abs(diff),
-            )
-
         # insert in cash
         cash_history = history(db_session = db_session, tickers = config['model']['cash'],  days=config['model']['trend_window_days'])
         print('cash weight: %s' % ( weight ))
@@ -248,6 +247,17 @@ if round(market_weight, 3) < 1.0 and not is_bull_market:  # this section manages
         qty = share_quantity(price = price, weight = weight,portfolio_value = portfolio_value)
         # buy cash
         if LIVE_TRADE:
+
+            # if position in gold, sell
+            if config['model']['gold'] in current_positions:
+                api.submit_order(
+                    symbol=config['model']['gold'],
+                    time_in_force='day',
+                    side='sell',
+                    type='market',
+                    qty=api.get_position(config['model']['gold']).qty,
+                )
+
             if config['model']['cash'] in current_positions:
                 # check quanity for existing position
                 diff = qty - int(api.get_position(config['model']['cash']).qty)
