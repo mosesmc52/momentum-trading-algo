@@ -4,7 +4,9 @@ Helper functions.
 import math
 import time
 from datetime import datetime, timedelta
+import requests
 
+from lxml import html
 import numpy as np
 from scipy import stats
 import pandas as pd
@@ -29,6 +31,19 @@ def str2bool(value):
     else:
         raise ValueError('invalid literal for boolean: "%s"' % value)
 
+
+def parse_wikipedia():
+    response = requests.get('https://en.wikipedia.org/wiki/List_of_S%26P_500_companies')
+    mainTree = html.fromstring(response.text)
+
+    companies = []
+    for row in mainTree.xpath('//table[contains(@id, "constituents")]/tbody/tr'):
+        if len(row.xpath('td')):
+            companies.append({'Symbol': row.xpath('td/a/text()')[0], 'Name': row.xpath('td/a/text()')[1]})
+
+    log('\n{0} Companies found on Wikipedia: S&P 500 Constituents Page'.format( len(companies)), 'success')
+
+    return companies
 
 def price_history(security_api, ticker, start_date, end_date, frequency='daily', page_size = 10000, print_test = False ):
     has_next_page = True

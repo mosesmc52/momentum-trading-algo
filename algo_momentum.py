@@ -16,7 +16,7 @@ from sentry_sdk import capture_exception
 # find on https://docs.sentry.io/error-reporting/quickstart/?platform=python
 sentry_sdk.init(dsn=os.getenv('SENTRY_DSN'))
 
-from helper import (str2bool, share_quantity, momentum_quality, momentum_score, volatility, history, TMOM )
+from helper import (str2bool, parse_wikipedia, share_quantity, momentum_quality, momentum_score, volatility, history, TMOM )
 from log import log
 
 # constants
@@ -51,10 +51,10 @@ else:
     log('Bear Market', 'warning')
 
 # read s&p 500 companies into pandas dataframe
-companies = pd.read_csv('s-and-p-500-companies.csv')
+companies  = parse_wikipedia()
 
 mom_equities = pd.DataFrame(columns=['ticker','inf_discr', 'score'])
-for _, company in companies.iterrows():
+for company in companies:
 
     # calculate inference
     equity_history = history(db_session = db_session, tickers = [company['Symbol']],  days = DAYS_IN_YEAR)
