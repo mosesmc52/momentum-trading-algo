@@ -13,6 +13,9 @@ load_dotenv(find_dotenv())
 import sentry_sdk
 from sentry_sdk import capture_exception
 
+import sendgrid
+from sendgrid.helpers.mail import *
+
 # find on https://docs.sentry.io/error-reporting/quickstart/?platform=python
 sentry_sdk.init(dsn=os.getenv('SENTRY_DSN'))
 
@@ -135,15 +138,17 @@ log('Positions', 'success')
 market_weight = 0.0
 portfolio_value = round( float(account.equity), 3)
 positions = 0
+
+updated_positions = []
 for security, data in position_volatility.iterrows():
 
     if security in kept_positions:
         qty = share_quantity(price = data['price'], weight = data['weight'],portfolio_value = portfolio_value)
 
         if qty:
+            diff = qty - int(api.get_position(security).qty)
             if LIVE_TRADE:
                 # check quanity for existing position
-                diff = qty - int(api.get_position(security).qty)
 
                 # buy or sell the difference
                 if diff > 0:
@@ -154,6 +159,8 @@ for security, data in position_volatility.iterrows():
                         type='market',
                         qty=diff,
                     )
+
+
                 elif diff < 0:
                     api.submit_order(
                         symbol=security,
@@ -162,10 +169,26 @@ for security, data in position_volatility.iterrows():
                         type='market',
                         qty=abs(diff),
                     )
+
+            updated_positions.append({
+                'security': security,
+                'action':'buy' if diff > 0 else 'sell',
+                'qty': qty,
+                'diff': diff
+            })
+
             market_weight += data['weight']
             log('{0}: {1}'.format(security, qty), 'info')
             positions+= 1
+
         else:
+            updated_positions.append({
+                'security': security,
+                'action':'buy' if diff > 0 else 'sell',
+                'qty': 0,
+                'diff': - int(api.get_position(security).qty)
+            })
+
             log('{0}: 0'.format(security), 'warning')
     elif is_bull_market:
             qty = share_quantity(price = data['price'], weight = data['weight'],portfolio_value = portfolio_value)
@@ -178,10 +201,25 @@ for security, data in position_volatility.iterrows():
                         type='market',
                         qty=qty,
                     )
+
+                updated_positions.append({
+                'security': security,
+                'action':'buy',
+                'qty': qty,
+                'diff': qty
+                })
+
                 market_weight += data['weight']
                 log('{0}: {1}'.format(security, qty), 'info')
                 positions+= 1
             else:
+                updated_positions.append({
+                    'security': security,
+                    'action':'buy',
+                    'qty': 0,
+                    'diff': 0
+                })
+
                 log('{0}: 0'.format(security), 'warning')
 
 print('desired portfolio size: {0}'.format(len(new_portfolio)))
@@ -199,6 +237,15 @@ if round(market_weight, 3) < 1.0 and not is_bull_market:  # this section manages
         price = gld_history.tail(1)['close'][0]
         qty = share_quantity(price = price, weight = weight,portfolio_value = portfolio_value)
         # buy gold
+
+        if api.get_position(config['model']['cash']).qty:
+            updated_positions.append({
+            'security': config['model']['cash'],
+            'action':'sell',
+            'qty': 0,
+            'diff': - int(api.get_position(config['model']['cash']).qty),
+            })
+
         if LIVE_TRADE:
             # if position in cash, sell
             if config['model']['cash'] in current_positions:
@@ -210,9 +257,19 @@ if round(market_weight, 3) < 1.0 and not is_bull_market:  # this section manages
                     qty=api.get_position(config['model']['cash']).qty,
                 )
 
-            if config['model']['gold'] in current_positions:
+
+        if config['model']['gold'] in current_positions:
+            diff = qty - int(api.get_position(config['model']['gold']).qty)
+
+            updated_positions.append({
+                'security': config['model']['gold'],
+                'action':'buy' if diff > 0 else 'sell',
+                'qty': qty,
+                'diff': diff
+            })
+
+            if LIVE_TRADE:
                 # check quanity for existing position
-                diff = qty - int(api.get_position(config['model']['gold']).qty)
 
                 # buy or sell the difference
                 if diff > 0:
@@ -223,6 +280,7 @@ if round(market_weight, 3) < 1.0 and not is_bull_market:  # this section manages
                         type='market',
                         qty=diff,
                     )
+
                 elif diff < 0:
                     api.submit_order(
                         symbol=config['model']['gold'],
@@ -231,7 +289,17 @@ if round(market_weight, 3) < 1.0 and not is_bull_market:  # this section manages
                         type='market',
                         qty=abs(diff),
                     )
-            else:
+
+        else:
+
+            updated_positions.append({
+            'security': config['model']['gold'],
+            'action':'buy',
+            'qty': qty,
+            'diff': qty
+            })
+
+            if LIVE_TRADE:
                 api.submit_order(
                     symbol=config['model']['gold'],
                     time_in_force='day',
@@ -239,6 +307,7 @@ if round(market_weight, 3) < 1.0 and not is_bull_market:  # this section manages
                     type='market',
                     qty=qty,
                 )
+
     else:
         # insert in cash
         cash_history = history(db_session = db_session, tickers = config['model']['cash'],  days=config['model']['trend_window_days'])
@@ -246,10 +315,20 @@ if round(market_weight, 3) < 1.0 and not is_bull_market:  # this section manages
         price = cash_history.tail(1)['close'][0]
         qty = share_quantity(price = price, weight = weight,portfolio_value = portfolio_value)
         # buy cash
-        if LIVE_TRADE:
 
-            # if position in gold, sell
-            if config['model']['gold'] in current_positions:
+        # if position in gold, sell
+        if config['model']['gold'] in current_positions:
+
+            if api.get_position(config['model']['gold']).qty:
+                updated_positions.append({
+                'security': config['model']['gold'],
+                'action':'sell',
+                'qty': 0,
+                'diff': - int(api.get_position(config['model']['gold']).qty)
+                })
+
+            if LIVE_TRADE:
+
                 api.submit_order(
                     symbol=config['model']['gold'],
                     time_in_force='day',
@@ -258,10 +337,18 @@ if round(market_weight, 3) < 1.0 and not is_bull_market:  # this section manages
                     qty=api.get_position(config['model']['gold']).qty,
                 )
 
-            if config['model']['cash'] in current_positions:
-                # check quanity for existing position
-                diff = qty - int(api.get_position(config['model']['cash']).qty)
+        if config['model']['cash'] in current_positions:
+            # check quanity for existing position
+            diff = qty - int(api.get_position(config['model']['cash']).qty)
 
+            updated_positions.append({
+                'security': config['model']['cash'],
+                'action':'buy' if diff > 0 else 'sell',
+                'qty': qty,
+                'diff': diff
+            })
+
+            if LIVE_TRADE:
                 # buy or sell the difference
                 if diff > 0:
                     api.submit_order(
@@ -271,6 +358,9 @@ if round(market_weight, 3) < 1.0 and not is_bull_market:  # this section manages
                         type='market',
                         qty=diff,
                     )
+
+
+
                 elif diff < 0:
                     api.submit_order(
                         symbol=config['model']['cash'],
@@ -279,7 +369,18 @@ if round(market_weight, 3) < 1.0 and not is_bull_market:  # this section manages
                         type='market',
                         qty=abs(diff),
                     )
-            else:
+
+
+        else:
+
+            updated_positions.append({
+            'security': config['model']['cash'],
+            'action':'buy',
+            'qty': qty,
+            'diff': qty
+            })
+
+            if LIVE_TRADE:
                 api.submit_order(
                     symbol=config['model']['cash'],
                     time_in_force='day',
@@ -289,3 +390,37 @@ if round(market_weight, 3) < 1.0 and not is_bull_market:  # this section manages
                 )
 
 # Email Positions
+EMAIL_POSITIONS = str2bool(os.getenv('EMAIL_POSITIONS', False))
+
+message_body = 'Market Condition: {0}\n'.format('Bull' if is_bull_market else 'Bear' )
+message_body += 'Total Positions: {0}\n'.format(len(updated_positions))
+message_body += '---------------------------------------------------\n'
+for position in updated_positions:
+    diff = ''
+    if position['diff'] >= 0:
+        diff = '[+{0}]'.format(  position['diff'] )
+    elif position['diff'] < 0:
+        diff = '[{0}]'.format(  position['diff'] )
+
+    message_body += '{0}: {1} {2} - https://finviz.com/quote.ashx?t={3}\n'.format(position['security'], position['qty'], diff, position['security'] )
+
+if EMAIL_POSITIONS:
+    TO_ADDRESSES = os.getenv('TO_ADDRSSES', '').split(',')
+    FROM_ADDRESS = os.getenv('FROM_ADDRESS', '').split(',')
+    sg = sendgrid.SendGridAPIClient(api_key=os.environ.get('SENDGRID_API_KEY'))
+
+    from_email = Email(FROM_ADDRESS)
+    subject = "Your Monthly Momentum Algo Position Report"
+    for to_address in TO_ADDRESSES:
+        to_email = To(to_address)
+        content = Content("text/plain", message_body)
+        mail = Mail(from_email, to_email, subject, content)
+
+        response = sg.client.mail.send.post(request_body=mail.get())
+
+        print('status code: {0}'.format(response.status_code))
+        print('body: {0}'.format(response.body))
+        print('headers: {0}'.format(response.headers))
+else:
+    print('---------------------------------------------------\n')
+    print(message_body)
