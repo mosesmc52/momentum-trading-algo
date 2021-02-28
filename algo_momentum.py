@@ -392,35 +392,40 @@ if round(market_weight, 3) < 1.0 and not is_bull_market:  # this section manages
 # Email Positions
 EMAIL_POSITIONS = str2bool(os.getenv('EMAIL_POSITIONS', False))
 
-message_body = 'Market Condition: {0}\n'.format('Bull' if is_bull_market else 'Bear' )
-message_body += 'Total Positions: {0}\n'.format(len(updated_positions))
-message_body += '---------------------------------------------------\n'
+# too lazy to write better
+message_body_html = 'Market Condition: {0}<br>'.format('Bull' if is_bull_market else 'Bear' )
+message_body_plain = 'Market Condition: {0}\n'.format('Bull' if is_bull_market else 'Bear' )
+
+message_body_html += 'Total Positions: {0}<br>'.format(len(updated_positions))
+message_body_plain += 'Total Positions: {0}\n'.format(len(updated_positions))
+
+message_body_html += '---------------------------------------------------<br>'
+message_body_plain += '---------------------------------------------------\n'
+
 for position in updated_positions:
     diff = ''
+
     if position['diff'] >= 0:
         diff = '[+{0}]'.format(  position['diff'] )
     elif position['diff'] < 0:
         diff = '[{0}]'.format(  position['diff'] )
 
-    message_body += '{0}: {1} {2} - https://finviz.com/quote.ashx?t={3}\n'.format(position['security'], position['qty'], diff, position['security'] )
+    message_body_html += '<a clicktracking=off href="https://finviz.com/quote.ashx?t={0}">{1}</a>: {2} {3}<br>'.format(position['security'] , position['security'], position['qty'], diff)
+    message_body_plain += '{0}: {1} {2}\n'.format(position['security'], position['qty'], diff )
 
 if EMAIL_POSITIONS:
-    TO_ADDRESSES = os.getenv('TO_ADDRSSES', '').split(',')
-    FROM_ADDRESS = os.getenv('FROM_ADDRESS', '').split(',')
+    TO_ADDRESSES = os.getenv('TO_ADDRESSES', '').split(',')
+    FROM_ADDRESS = os.getenv('FROM_ADDRESS', '')
     sg = sendgrid.SendGridAPIClient(api_key=os.environ.get('SENDGRID_API_KEY'))
 
     from_email = Email(FROM_ADDRESS)
     subject = "Your Monthly Momentum Algo Position Report"
     for to_address in TO_ADDRESSES:
         to_email = To(to_address)
-        content = Content("text/plain", message_body)
+        content = Content("text/html", message_body_html)
         mail = Mail(from_email, to_email, subject, content)
 
         response = sg.client.mail.send.post(request_body=mail.get())
 
-        print('status code: {0}'.format(response.status_code))
-        print('body: {0}'.format(response.body))
-        print('headers: {0}'.format(response.headers))
-else:
-    print('---------------------------------------------------\n')
-    print(message_body)
+print('---------------------------------------------------\n')
+print(message_body_plain)
