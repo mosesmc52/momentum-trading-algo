@@ -20,3 +20,6 @@ pip install -r requirements.txt
 from database import ( init_db )
 init_db()
 ````
+
+#### CRON Tab
+0 7 1 * * [path]/invest.sh > [outputpath]/mom-algo.log 2>&1
