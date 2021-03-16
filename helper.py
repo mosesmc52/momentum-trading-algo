@@ -43,10 +43,8 @@ def parse_wiki_sp_consituents(sources = []):
         companies500 = []
         for row in mainTree.xpath('//table[contains(@id, "constituents")]/tbody/tr'):
             if len(row.xpath('td')):
-                try:
-                    companies500.append({'Symbol': row.xpath('td/a/text()')[0], 'Name': row.xpath('td/a/text()')[1]})
-                except:
-                    pass
+                companies500.append({'Symbol': row.xpath('td/a/text()')[0], 'Name': row.xpath('td/a/text()')[1]})
+
 
         log('{0} Companies found on Wikipedia: S&P 500 Constituents Page'.format( len(companies500)), 'success')
         companies += companies500
@@ -59,10 +57,8 @@ def parse_wiki_sp_consituents(sources = []):
         companies400 = []
         for row in mainTree.xpath('//table[contains(@id, "constituents")]/tbody/tr'):
             if len(row.xpath('td')):
-                try:
-                    companies400.append({'Symbol': row.xpath('td/a/text()')[0], 'Name': row.xpath('td/a/text()')[1]})
-                except:
-                    pass
+                companies400.append({'Symbol': row.xpath('td[2]/a/text()')[0].strip() , 'Name': row.xpath('td/a/text()')[0]})
+
 
         log('{0} Companies found on Wikipedia: S&P 400 Constituents Page'.format( len(companies400)), 'success')
         companies += companies400
@@ -75,10 +71,8 @@ def parse_wiki_sp_consituents(sources = []):
         companies600 = []
         for row in mainTree.xpath('//table[contains(@id, "constituents")]/tbody/tr'):
             if len(row.xpath('td')):
-                try:
-                    companies600.append({'Symbol': row.xpath('td/a/text()')[0], 'Name': row.xpath('td/a/text()')[1]})
-                except:
-                    pass
+                companies600.append({'Symbol': row.xpath('td[2]/descendant::text()')[0].strip() , 'Name': row.xpath('td[1]/descendant::text()')[0].strip()})
+
 
         log('{0} Companies found on Wikipedia: S&P 600 Constituents Page'.format( len(companies600)), 'success')
         companies += companies600
