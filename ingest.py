@@ -13,7 +13,7 @@ from intrinio_sdk.rest import ApiException
 intrinio_sdk.ApiClient().configuration.api_key['api_key'] = os.getenv('INTRINIO_PROD_KEY')
 security_api = intrinio_sdk.SecurityApi()
 
-from helper import ( ingest_security, parse_wikipedia )
+from helper import ( ingest_security, parse_wiki_sp_consituents )
 
 # open sqllite db
 engine = sqlalchemy.create_engine('sqlite:///securities.db')
@@ -24,7 +24,7 @@ for ETF in ['SPY', 'IEF', 'GLD']:
     ingest_security(intrinio_security =  security_api, db_session = db_session, ticker = ETF, name = None, type='etf' )
 
 # parse s&p 500 companies from wikipedia
-companies = parse_wikipedia()
+companies = parse_wiki_sp_consituents(sources = ['500', '400', '600'])
 
 # iterate through companies
 for company in companies:

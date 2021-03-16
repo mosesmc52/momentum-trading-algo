@@ -32,16 +32,56 @@ def str2bool(value):
         raise ValueError('invalid literal for boolean: "%s"' % value)
 
 
-def parse_wikipedia():
-    response = requests.get('https://en.wikipedia.org/wiki/List_of_S%26P_500_companies')
-    mainTree = html.fromstring(response.text)
+def parse_wiki_sp_consituents(sources = []):
 
     companies = []
-    for row in mainTree.xpath('//table[contains(@id, "constituents")]/tbody/tr'):
-        if len(row.xpath('td')):
-            companies.append({'Symbol': row.xpath('td/a/text()')[0], 'Name': row.xpath('td/a/text()')[1]})
+    if '500' in sources:
+        log('\nParsing S&P 500 Wiki Constituents', 'info')
+        response = requests.get('https://en.wikipedia.org/wiki/List_of_S%26P_500_companies')
+        mainTree = html.fromstring(response.text)
 
-    log('\n{0} Companies found on Wikipedia: S&P 500 Constituents Page'.format( len(companies)), 'success')
+        companies500 = []
+        for row in mainTree.xpath('//table[contains(@id, "constituents")]/tbody/tr'):
+            if len(row.xpath('td')):
+                try:
+                    companies500.append({'Symbol': row.xpath('td/a/text()')[0], 'Name': row.xpath('td/a/text()')[1]})
+                except:
+                    pass
+
+        log('{0} Companies found on Wikipedia: S&P 500 Constituents Page'.format( len(companies500)), 'success')
+        companies += companies500
+
+    if '400' in sources:
+        log('\nParsing S&P 500 Wiki Constituents', 'info')
+        response = requests.get('https://en.wikipedia.org/wiki/List_of_S%26P_400_companies')
+        mainTree = html.fromstring(response.text)
+
+        companies400 = []
+        for row in mainTree.xpath('//table[contains(@id, "constituents")]/tbody/tr'):
+            if len(row.xpath('td')):
+                try:
+                    companies400.append({'Symbol': row.xpath('td/a/text()')[0], 'Name': row.xpath('td/a/text()')[1]})
+                except:
+                    pass
+
+        log('{0} Companies found on Wikipedia: S&P 400 Constituents Page'.format( len(companies400)), 'success')
+        companies += companies400
+
+    if '600' in sources:
+        log('\nParsing S&P 500 Wiki Constituents', 'info')
+        response = requests.get('https://en.wikipedia.org/wiki/List_of_S%26P_600_companies')
+        mainTree = html.fromstring(response.text)
+
+        companies600 = []
+        for row in mainTree.xpath('//table[contains(@id, "constituents")]/tbody/tr'):
+            if len(row.xpath('td')):
+                try:
+                    companies600.append({'Symbol': row.xpath('td/a/text()')[0], 'Name': row.xpath('td/a/text()')[1]})
+                except:
+                    pass
+
+        log('{0} Companies found on Wikipedia: S&P 600 Constituents Page'.format( len(companies600)), 'success')
+        companies += companies600
 
     return companies
 
@@ -98,7 +138,7 @@ def ingest_security(intrinio_security, db_session, ticker, name = '', type = 'st
     now = datetime.now()
     end_date  =  now.strftime('%Y-%m-%d')
 
-    log(ticker , 'success')
+    log('\n{0}'.format(ticker) , 'success')
     # insert security in database if doesn't exist
     security = db_session.query(models.Security).filter(models.Security.ticker == ticker).first()
     if not security:

@@ -19,7 +19,7 @@ from sendgrid.helpers.mail import *
 # find on https://docs.sentry.io/error-reporting/quickstart/?platform=python
 sentry_sdk.init(dsn=os.getenv('SENTRY_DSN'))
 
-from helper import (str2bool, parse_wikipedia, share_quantity, momentum_quality, momentum_score, volatility, history, TMOM )
+from helper import (str2bool, parse_wiki_sp_consituents, share_quantity, momentum_quality, momentum_score, volatility, history, TMOM )
 from log import log
 
 # constants
@@ -53,8 +53,8 @@ if is_bull_market:
 else:
     log('Bear Market', 'warning')
 
-# read s&p 500 companies into pandas dataframe
-companies  = parse_wikipedia()
+# read s&p 500, 400 companies into pandas dataframe
+companies = parse_wiki_sp_consituents(sources = ['500', '400'])
 
 mom_equities = pd.DataFrame(columns=['ticker','inf_discr', 'score'])
 for company in companies:
