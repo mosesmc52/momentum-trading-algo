@@ -10,10 +10,11 @@ from lxml import html
 import numpy as np
 from scipy import stats
 import pandas as pd
-from intrinio_sdk.rest import ApiException
+from alpaca_trade_api.rest import TimeFrame
 
 import sqlalchemy
 import models
+
 
 from log import log
 
@@ -79,56 +80,12 @@ def parse_wiki_sp_consituents(sources = []):
 
     return companies
 
-def price_history(security_api, ticker, start_date, end_date, frequency='daily', page_size = 10000, print_test = False ):
-    has_next_page = True
-    next_page= ''
-    page = 1
-    df = pd.DataFrame()
-    while has_next_page:
-        try:
-            api_response = security_api.get_security_stock_prices(identifier = ticker, start_date=start_date, end_date=end_date, frequency=frequency, page_size=page_size, next_page=next_page)
-            #if not api_response.to_dict()['next_page'] and page == 1:
-            #    has_next_page = False
-            #    continue
+def price_history(alpaca_api, ticker, start_date, end_date, print_test = False ):
 
-        except ApiException as e:
-            print(ticker)
-            print("Exception when calling SecurityApi->get_security_stock_prices: %s\r\n" % e)
-            has_next_page = False
-            continue
-
-        if print_test:
-            print('{ticker} price rows: {rows}, page: {page}, next page: {nextpage}'.format(ticker = ticker, rows = len(api_response.to_dict()['stock_prices']), page= page, nextpage = api_response.to_dict()['next_page']) )
-
-        has_another_page = 'no'
-        if bool(api_response.to_dict()['next_page'] == None):
-             has_next_page = False
-        else:
-            has_another_page = 'yes'
-            next_page = api_response.to_dict()['next_page']
-            page +=1
-
-        if print_test:
-            print('save_price_history another page: {has_another_page}'.format(has_another_page = has_another_page ))
+    return api.get_bars(ticker, TimeFrame.Day, start_date.strftime("%Y-%m-%d"), end_date.strftime("%Y-%m-%d"))
 
 
-        for price in api_response.to_dict()['stock_prices']:
-
-            df = df.append({'date': price['date'].strftime("%Y-%m-%d"),
-                            'open': price['adj_open'],
-                            'high': price['adj_high'],
-                            'low': price['adj_low'],
-                            'close': price['adj_close'],
-                            'volume': price['adj_volume'],
-                            'dividend': 0.0,
-                            'split': 1.0
-                            }, ignore_index=True)
-
-    df = df.dropna()
-    return df
-
-
-def ingest_security(intrinio_security, db_session, ticker, name = '', type = 'stock'):
+def ingest_security(alpaca_api, db_session, ticker, name = '', type = 'stock'):
     now = datetime.now()
     end_date  =  now.strftime('%Y-%m-%d')
 
@@ -156,7 +113,7 @@ def ingest_security(intrinio_security, db_session, ticker, name = '', type = 'st
                 return True
 
     # retrieve price history since latest price
-    hist = price_history(intrinio_security, ticker, start_date, end_date)
+    hist = price_history(alpaca_api, ticker, start_date, end_date)
     if not len(hist):
         log('No History found since {0}'.format(last_price.date.strftime('%m-%d-%Y')), 'info')
         time.sleep(1)
