@@ -230,13 +230,13 @@ if market_weight:
 
 # if not bull market invest in cash
 if round(market_weight, 3) < 1.0 and not is_bull_market:  # this section manages bear market
-    gld_history = history(db_session = db_session, tickers = config['model']['gold'],  days=config['model']['trend_window_days'])
+    etf_history = history(db_session = db_session, tickers = config['model']['bear_etf'],  days=config['model']['trend_window_days'])
     weight = 1.0 - market_weight
-    if (TMOM(gld_history['close']) > TMOM(cash_history['close'])) and (gld_history['close'].tail(1).iloc[0] > gld_history['close'].mean()):
-        print('gold weight: %s' % ( weight ))
-        price = gld_history.tail(1)['close'][0]
+    if (TMOM(etf_history['close']) > TMOM(cash_history['close'])) and (etf_history['close'].tail(1).iloc[0] > etf_history['close'].mean()):
+        print('{0} weight: {1}'.format( config['model']['bear_etf'] , weight ))
+        price = etf_history.tail(1)['close'][0]
         qty = share_quantity(price = price, weight = weight,portfolio_value = portfolio_value)
-        # buy gold
+        # buy bear_etf
 
         if api.get_position(config['model']['cash']).qty:
             updated_positions.append({
@@ -258,11 +258,11 @@ if round(market_weight, 3) < 1.0 and not is_bull_market:  # this section manages
                 )
 
 
-        if config['model']['gold'] in current_positions:
-            diff = qty - int(api.get_position(config['model']['gold']).qty)
+        if config['model']['bear_etf'] in current_positions:
+            diff = qty - int(api.get_position(config['model']['bear_etf']).qty)
 
             updated_positions.append({
-                'security': config['model']['gold'],
+                'security': config['model']['bear_etf'],
                 'action':'buy' if diff > 0 else 'sell',
                 'qty': qty,
                 'diff': diff
@@ -274,7 +274,7 @@ if round(market_weight, 3) < 1.0 and not is_bull_market:  # this section manages
                 # buy or sell the difference
                 if diff > 0:
                     api.submit_order(
-                        symbol=config['model']['gold'],
+                        symbol=config['model']['bear_etf'],
                         time_in_force='day',
                         side='buy',
                         type='market',
@@ -283,7 +283,7 @@ if round(market_weight, 3) < 1.0 and not is_bull_market:  # this section manages
 
                 elif diff < 0:
                     api.submit_order(
-                        symbol=config['model']['gold'],
+                        symbol=config['model']['bear_etf'],
                         time_in_force='day',
                         side='sell',
                         type='market',
@@ -293,7 +293,7 @@ if round(market_weight, 3) < 1.0 and not is_bull_market:  # this section manages
         else:
 
             updated_positions.append({
-            'security': config['model']['gold'],
+            'security': config['model']['bear_etf'],
             'action':'buy',
             'qty': qty,
             'diff': qty
@@ -301,7 +301,7 @@ if round(market_weight, 3) < 1.0 and not is_bull_market:  # this section manages
 
             if LIVE_TRADE:
                 api.submit_order(
-                    symbol=config['model']['gold'],
+                    symbol=config['model']['bear_etf'],
                     time_in_force='day',
                     side='buy',
                     type='market',
@@ -316,25 +316,25 @@ if round(market_weight, 3) < 1.0 and not is_bull_market:  # this section manages
         qty = share_quantity(price = price, weight = weight,portfolio_value = portfolio_value)
         # buy cash
 
-        # if position in gold, sell
-        if config['model']['gold'] in current_positions:
+        # if position in bear_etf, sell
+        if config['model']['bear_etf'] in current_positions:
 
-            if api.get_position(config['model']['gold']).qty:
+            if api.get_position(config['model']['bear_etf']).qty:
                 updated_positions.append({
-                'security': config['model']['gold'],
+                'security': config['model']['bear_etf'],
                 'action':'sell',
                 'qty': 0,
-                'diff': - int(api.get_position(config['model']['gold']).qty)
+                'diff': - int(api.get_position(config['model']['bear_etf']).qty)
                 })
 
             if LIVE_TRADE:
 
                 api.submit_order(
-                    symbol=config['model']['gold'],
+                    symbol=config['model']['bear_etf'],
                     time_in_force='day',
                     side='sell',
                     type='market',
-                    qty=api.get_position(config['model']['gold']).qty,
+                    qty=api.get_position(config['model']['bear_etf']).qty,
                 )
 
         if config['model']['cash'] in current_positions:
