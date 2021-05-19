@@ -92,7 +92,7 @@ print(ranking_table)
 
 kept_positions =  []
 for position in api.list_positions():
-    if (position.symbol in ['IEF', 'GLD'] and is_bull_market) or \
+    if (position.symbol in ['IEF', 'IEF'] and is_bull_market) or \
         ( position.symbol not in mom_equities.index.tolist() and today.month in [3, 6, 9, 12]):
         if LIVE_TRADE:
             api.submit_order(
