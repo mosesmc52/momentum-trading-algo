@@ -24,8 +24,8 @@ for ETF in ['SPY', 'IEI', 'IEF', 'TLH','TLT', 'SHY']:
     ingest_security(intrinio_security =  security_api, db_session = db_session, ticker = ETF, name = None, type='etf' )
 
 # parse s&p 500 companies from wikipedia
-#companies = parse_wiki_sp_consituents(sources = ['500', '400', '600'])
+companies = parse_wiki_sp_consituents(sources = ['500', '400', '600'])
 
 # iterate through companies
-#for company in companies:
-#    ingest_security(intrinio_security =  security_api, db_session = db_session, ticker = company['Symbol'], name = company['Name'], type = 'stock' )
+for company in companies:
+    ingest_security(intrinio_security =  security_api, db_session = db_session, ticker = company['Symbol'], name = company['Name'], type = 'stock' )
