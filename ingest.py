@@ -20,7 +20,7 @@ engine = sqlalchemy.create_engine('sqlite:///securities.db')
 db_session = sqlalchemy.orm.Session(bind=engine)
 
 # Ingest  ETF Data
-for ETF in ['SPY', 'IEF', 'GLD']:
+for ETF in ['SPY', 'IEF', 'SHY']:
     ingest_security(intrinio_security =  security_api, db_session = db_session, ticker = ETF, name = None, type='etf' )
 
 # parse s&p 500 companies from wikipedia
