@@ -62,12 +62,12 @@ for company in companies:
     # calculate inference
     equity_history = history(db_session = db_session, tickers = [company['Symbol']],  days = DAYS_IN_YEAR)
     if not len(equity_history):
-        #log('{0}, no data'.format(company['Symbol']))
+        log('{0}, no data'.format(company['Symbol']))
         continue
 
     inf_discr, is_quality = momentum_quality(equity_history['close'], min_inf_discr = config['model']['min_inf_discr'])
     if not is_quality and company['Symbol'] not in current_positions:
-        #log('{0}, quality failed'.format(company['Symbol']))
+        log('{0}, quality failed'.format(company['Symbol']))
         continue
 
     # calculate momentum score
@@ -76,10 +76,10 @@ for company in companies:
     momentum_hist = equity_history[momentum_start:data_end]
     score = momentum_score(equity_history['close']).mean()
     if score <= float(config['model']['minimum_score_momentum']) and company['Symbol'] not in current_positions:
-        #log('{0}, score {0} less than minimum'.format(company['Symbol'], score))
+        log('{0}, score {0} less than minimum'.format(company['Symbol'], score))
         continue
 
-    #log(company['Symbol'], 'success')
+    log(company['Symbol'], 'success')
     mom_equities = mom_equities.append({'ticker': company['Symbol'],
                  'inf_discr': inf_discr,
                  'score': score}, ignore_index=True)

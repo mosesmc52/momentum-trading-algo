@@ -1,9 +1,10 @@
-alpaca-trade-api==0.51.0
+alpaca-trade-api==1.2.1
 certifi==2020.6.20
 chardet==3.0.4
 idna==2.10
 intrinio-sdk==5.6.1
 lxml==4.6.2
+msgpack==1.0.2
 numpy==1.19.2
 pandas==1.1.2
 python-dateutil==2.8.1
