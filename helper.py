@@ -1,6 +1,7 @@
 """
 Helper functions.
 """
+from datetime import timedelta
 import math
 import time
 from datetime import datetime, timedelta
@@ -11,7 +12,7 @@ import numpy as np
 from scipy import stats
 import pandas as pd
 from alpaca_trade_api.rest import TimeFrame
-
+from dateutil import parser as time_parser
 import sqlalchemy
 import models
 
@@ -80,14 +81,14 @@ def parse_wiki_sp_consituents(sources = []):
 
     return companies
 
-def price_history(alpaca_api, ticker, start_date, end_date, print_test = False ):
-
+def price_history(api, ticker, start_date, end_date, print_test = False ):
     return api.get_bars(ticker, TimeFrame.Day, start_date.strftime("%Y-%m-%d"), end_date.strftime("%Y-%m-%d"))
 
 
 def ingest_security(alpaca_api, db_session, ticker, name = '', type = 'stock'):
     now = datetime.now()
-    end_date  =  now.strftime('%Y-%m-%d')
+    end_date  =  now - timedelta( hours = 1)
+
 
     log('\n{0}'.format(ticker) , 'success')
     # insert security in database if doesn't exist
@@ -113,25 +114,22 @@ def ingest_security(alpaca_api, db_session, ticker, name = '', type = 'stock'):
                 return True
 
     # retrieve price history since latest price
-    hist = price_history(alpaca_api, ticker, start_date, end_date)
-    if not len(hist):
-        log('No History found since {0}'.format(last_price.date.strftime('%m-%d-%Y')), 'info')
-        time.sleep(1)
+    if start_date > end_date:
+        log('0 day prices inserted', 'info')
         return True
 
-    # save to database
-    for _, price in hist.sort_values(by = 'date', ascending = True).iterrows():
+    hist = price_history(alpaca_api, ticker, start_date, end_date)
+
+    for price in hist:
         object = models.Price(
-            close =price['close'],
-            date = datetime.strptime(price['date'], '%Y-%m-%d'),
+            close =price.c, # retrieve close price
+            date = time_parser.parse( str(price.t) ),
             security_id = security.id
         )
         db_session.add(object)
         db_session.commit()
 
-    print('{0} prices inserted'.format(len(hist)))
-    if len(hist) < 500:
-        time.sleep(1)
+    log('{0} day prices inserted'.format( len(hist)))
 
     return True
 

@@ -12,8 +12,6 @@ import alpaca_trade_api as tradeapi
 from alpaca_trade_api.rest import TimeFrame
 alpaca_api = tradeapi.REST(os.getenv('ALPACA_KEY_ID'), os.getenv('ALPACA_SECRET_KEY'), base_url=os.getenv('ALPACA_BASE_URL'))
 
-security_api = intrinio_sdk.SecurityApi()
-
 from helper import ( ingest_security, parse_wiki_sp_consituents )
 
 # open sqllite db
