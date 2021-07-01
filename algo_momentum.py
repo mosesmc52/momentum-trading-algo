@@ -246,7 +246,7 @@ if round(market_weight, 3) < 1.0 and not is_bull_market:  # this section manages
     weight = 1.0 - market_weight
     bear_weight = 0.0
 
-    if (TMOM(etf_history[sel_etf]['close']) > TMOM(cash_history['close']))
+    if (TMOM(etf_history[sel_etf]['close']) > TMOM(cash_history['close'])):
         bear_weight += weight / 2.0
 
     if (etf_history[sel_etf]['close'].tail(1).iloc[0] > etf_history[sel_etf]['close'].mean()):
