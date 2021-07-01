@@ -92,7 +92,9 @@ print(ranking_table)
 
 kept_positions =  []
 for position in api.list_positions():
-    bear_etfs = config['model']['bear_etfs'].split(',').append(config['model']['cash'])
+    bear_etfs = config['model']['bear_etfs'].split(',')
+    bear_etfs.append(config['model']['cash'])
+
     if (position.symbol in bear_etfs and is_bull_market) or \
         ( position.symbol not in mom_equities.index.tolist() and today.month in [3, 6, 9, 12]):
         if LIVE_TRADE:
