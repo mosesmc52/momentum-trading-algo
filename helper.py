@@ -87,7 +87,7 @@ def price_history(api, ticker, start_date, end_date, print_test = False ):
 
 def ingest_security(alpaca_api, db_session, ticker, name = '', type = 'stock'):
     now = datetime.now()
-    end_date  =  now - timedelta( hours = 1)
+    end_date  =  now - timedelta( hours = 24)
 
 
     log('\n{0}'.format(ticker) , 'success')
@@ -146,11 +146,16 @@ def momentum_quality( ts, min_inf_discr = 0.0):
     lookback_months = 12
 
     df['return'] = ts.resample('M').last().pct_change()[-lookback_months:-1]
+    if not len(df['return']):
+        return False, False
+
     df['pos_neg'] = df.apply(lambda row: _pos_neg(row['return']) ,axis=1)
     df['pos_sum'] = df['pos_neg'].cumsum()
 
-    positive_sum = df['pos_sum'].iloc[-1]
-    consist_indicator = df['pos_sum'].iloc[-1] >= lookback_months * 2 / 3
+    positive_sum = 0
+    if len(df['pos_sum']) > 0:
+        positive_sum = df['pos_sum'].iloc[-1]
+        consist_indicator = df['pos_sum'].iloc[-1] >= lookback_months * 2 / 3
 
     if positive_sum == 0:
         pos_percent = 0
