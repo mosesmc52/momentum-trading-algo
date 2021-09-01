@@ -1,4 +1,5 @@
 import os
+from datetime import datetime
 import alpaca_trade_api as tradeapi
 import numpy as np
 import pandas as pd
@@ -91,6 +92,7 @@ log('Ranking Table', 'success')
 print(ranking_table)
 
 kept_positions =  []
+today = datetime.now()
 for position in api.list_positions():
     bear_etfs = config['model']['bear_etfs'].split(',')
     bear_etfs.append(config['model']['cash'])
