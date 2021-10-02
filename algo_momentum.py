@@ -32,8 +32,16 @@ LIVE_TRADE = str2bool(os.getenv('LIVE_TRADE', False))
 # initialize Alpaca Trader
 api = tradeapi.REST(os.getenv('ALPACA_KEY_ID'), os.getenv('ALPACA_SECRET_KEY'), base_url=os.getenv('ALPACA_BASE_URL')) # or use ENV Vars shown below
 account = api.get_account()
-current_positions = [position.symbol for position in api.list_positions()]
 
+current_positions = []
+not_tradeable_positions = []
+for position in api.list_positions():
+    asset = api.get_asset(position.symbol)
+    if asset.tradable == True:
+        current_positions.append(position.symbol)
+    else:
+        log('{0} is not tradable, skipping'.format(position.symbol), 'error')
+        not_tradeable_positions.append(position.symbol)
 
 # open sqllite db
 engine = sqlalchemy.create_engine('sqlite:///securities.db')
@@ -59,6 +67,9 @@ companies = parse_wiki_sp_consituents(sources = ['500', '400'])
 
 mom_equities = pd.DataFrame(columns=['ticker','inf_discr', 'score'])
 for company in companies:
+    # if stock traded about 100 day MA ignore
+
+    # if stock moved > 15% in the past 90 days remove
 
     # calculate inference
     equity_history = history(db_session = db_session, tickers = [company['Symbol']],  days = DAYS_IN_YEAR)
@@ -94,6 +105,11 @@ print(ranking_table)
 kept_positions =  []
 today = datetime.now()
 for position in api.list_positions():
+
+    if position.symbol in not_tradeable_positions:
+        log('{0} is not tradable, skipping'.format(position.symbol), 'error')
+        continue
+
     bear_etfs = config['model']['bear_etfs'].split(',')
     bear_etfs.append(config['model']['cash'])
 
@@ -146,6 +162,11 @@ positions = 0
 
 updated_positions = []
 for security, data in position_volatility.iterrows():
+
+    asset = api.get_asset(security)
+    if asset.tradable == False:
+        log('{0} is not tradable, skipping'.format(security), 'error')
+        continue
 
     if security in kept_positions:
         qty = share_quantity(price = data['price'], weight = data['weight'],portfolio_value = portfolio_value)
