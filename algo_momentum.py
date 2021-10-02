@@ -77,6 +77,17 @@ for company in companies:
         log('{0}, no data'.format(company['Symbol']))
         continue
 
+    # if stock traded > 100 day MA
+    if market_history['close'].tail(1).iloc[0] <= equity_history['close'][len(equity_history['close']) - 100:].mean():
+        log('{0} is trading below 100 day moving average, skipping'.format(company['Symbol']), 'warning')
+        continue
+
+    # if stock moved > 15% in the past 90 days remove
+    returns = equity_history['close'][len(equity_history['close']) - 90:].pct_change()
+    if len(returns[ (returns <= -.15) | (returns > .15)]):
+        log('{0} moved greater than 15% in the past 90 days, skipping'.format(company['Symbol']), 'warning')
+        continue
+
     inf_discr, is_quality = momentum_quality(equity_history['close'], min_inf_discr = config['model']['min_inf_discr'])
     if not is_quality and company['Symbol'] not in current_positions:
         log('{0}, quality failed'.format(company['Symbol']))
