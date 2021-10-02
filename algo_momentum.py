@@ -67,7 +67,7 @@ companies = parse_wiki_sp_consituents(sources = ['500', '400'])
 
 mom_equities = pd.DataFrame(columns=['ticker','inf_discr', 'score'])
 for company in companies:
-    # if stock traded about 100 day MA ignore
+    # if stock traded > 100 day MA
 
     # if stock moved > 15% in the past 90 days remove
 
