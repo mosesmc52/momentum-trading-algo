@@ -7,7 +7,7 @@ def enum(**enums):
 ansi_color= enum(
 	green=2,
 	blue = 69,
-	red = 52,
+	red = 5,
 	cyan=30,
 	purple=26,
 	orange=166,
