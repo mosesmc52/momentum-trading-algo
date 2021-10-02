@@ -55,7 +55,7 @@ else:
     log('Bear Market', 'warning')
 
 # read s&p 500, 400 companies into pandas dataframe
-companies = parse_wiki_sp_consituents(sources = ['500', '400'])
+companies = parse_wiki_sp_consituents(os.getenv('SP_CONSITUENTS').split(','))
 
 mom_equities = pd.DataFrame(columns=['ticker','inf_discr', 'score'])
 for company in companies:
