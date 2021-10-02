@@ -38,7 +38,7 @@ def parse_wiki_sp_consituents(sources = []):
 
     companies = []
     if '500' in sources:
-        log('\nParsing S&P 500 Wiki Constituents', 'info')
+        log('\nParsing S&P 500 Large-Cap Wiki Constituents', 'info')
         response = requests.get('https://en.wikipedia.org/wiki/List_of_S%26P_500_companies')
         mainTree = html.fromstring(response.text)
 
@@ -52,7 +52,7 @@ def parse_wiki_sp_consituents(sources = []):
         companies += companies500
 
     if '400' in sources:
-        log('\nParsing S&P 500 Wiki Constituents', 'info')
+        log('\nParsing S&P 400 Mid-Cap Wiki Constituents', 'info')
         response = requests.get('https://en.wikipedia.org/wiki/List_of_S%26P_400_companies')
         mainTree = html.fromstring(response.text)
 
@@ -66,7 +66,7 @@ def parse_wiki_sp_consituents(sources = []):
         companies += companies400
 
     if '600' in sources:
-        log('\nParsing S&P 500 Wiki Constituents', 'info')
+        log('\nParsing S&P 600 Small-Cap Wiki Constituents', 'info')
         response = requests.get('https://en.wikipedia.org/wiki/List_of_S%26P_600_companies')
         mainTree = html.fromstring(response.text)
 
