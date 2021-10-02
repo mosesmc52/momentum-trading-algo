@@ -166,9 +166,7 @@ for security, data in position_volatility.iterrows():
     asset = api.get_asset(security)
     if asset.tradable == False:
         log('{0} is not tradable, skipping'.format(security), 'error')
-        continue
-
-    if security in kept_positions:
+    elif security in kept_positions:
         qty = share_quantity(price = data['price'], weight = data['weight'],portfolio_value = portfolio_value)
 
         if qty:
