@@ -82,8 +82,12 @@ def parse_wiki_sp_consituents(sources = []):
     return companies
 
 def price_history(api, ticker, start_date, end_date, print_test = False ):
-    return api.get_bars(ticker, TimeFrame.Day, start_date.strftime("%Y-%m-%d"), end_date.strftime("%Y-%m-%d"))
+    try:
+        return api.get_bars(ticker, TimeFrame.Day, start_date.strftime("%Y-%m-%d"), end_date.strftime("%Y-%m-%d"))
+    except TypeError as te:
+        log('{}\n'.format(te) , 'error')
 
+    return []
 
 def ingest_security(alpaca_api, db_session, ticker, name = '', type = 'stock'):
     now = datetime.now()
