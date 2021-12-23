@@ -14,8 +14,7 @@ load_dotenv(find_dotenv())
 import sentry_sdk
 from sentry_sdk import capture_exception
 
-import sendgrid
-from sendgrid.helpers.mail import *
+from SES import ( AmazonSES )
 
 # find on https://docs.sentry.io/error-reporting/quickstart/?platform=python
 sentry_sdk.init(dsn=os.getenv('SENTRY_DSN'))
@@ -67,10 +66,6 @@ companies = parse_wiki_sp_consituents(os.getenv('SP_CONSITUENTS').split(','))
 
 mom_equities = pd.DataFrame(columns=['ticker','inf_discr', 'score'])
 for company in companies:
-    # if stock traded > 100 day MA
-
-    # if stock moved > 15% in the past 90 days remove
-
     # calculate inference
     equity_history = history(db_session = db_session, tickers = [company['Symbol']],  days = DAYS_IN_YEAR)
     if not len(equity_history):
@@ -115,6 +110,7 @@ print(ranking_table)
 
 kept_positions =  []
 today = datetime.now()
+
 for position in api.list_positions():
 
     if position.symbol in not_tradeable_positions:
@@ -428,16 +424,12 @@ for position in updated_positions:
 if EMAIL_POSITIONS:
     TO_ADDRESSES = os.getenv('TO_ADDRESSES', '').split(',')
     FROM_ADDRESS = os.getenv('FROM_ADDRESS', '')
-    sg = sendgrid.SendGridAPIClient(api_key=os.environ.get('SENDGRID_API_KEY'))
-
-    from_email = Email(FROM_ADDRESS)
+    ses = AmazonSES(region = os.environ.get('AWS_SES_REGION_NAME'), access_key = os.environ.get('AWS_SES_ACCESS_KEY_ID'), secret_key= os.environ.get('AWS_SES_SECRET_ACCESS_KEY'), from = FROM_ADDRESS)
     subject = "Your Monthly Momentum Algo Position Report"
+
     for to_address in TO_ADDRESSES:
         to_email = To(to_address)
-        content = Content("text/html", message_body_html)
-        mail = Mail(from_email, to_email, subject, content)
-
-        response = sg.client.mail.send.post(request_body=mail.get())
+        ses.send_html_email( to = to_address, subject = subject, content = message_body_html)
 
 print('---------------------------------------------------\n')
 print(message_body_plain)

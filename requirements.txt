@@ -1,4 +1,6 @@
 alpaca-trade-api==1.2.1
+boto3==1.20.26
+botocore==1.23.26
 certifi==2020.6.20
 chardet==3.0.4
 idna==2.10
