@@ -424,12 +424,15 @@ for position in updated_positions:
 if EMAIL_POSITIONS:
     TO_ADDRESSES = os.getenv('TO_ADDRESSES', '').split(',')
     FROM_ADDRESS = os.getenv('FROM_ADDRESS', '')
-    ses = AmazonSES(region = os.environ.get('AWS_SES_REGION_NAME'), access_key = os.environ.get('AWS_SES_ACCESS_KEY_ID'), secret_key= os.environ.get('AWS_SES_SECRET_ACCESS_KEY'), from = FROM_ADDRESS)
+    ses = AmazonSES(region = os.environ.get('AWS_SES_REGION_NAME'),
+                    access_key = os.environ.get('AWS_SES_ACCESS_KEY_ID'),
+                    secret_key= os.environ.get('AWS_SES_SECRET_ACCESS_KEY'),
+                    from_address = os.environ.get('FROM_ADDRESS')
+                    )
     subject = "Your Monthly Momentum Algo Position Report"
 
     for to_address in TO_ADDRESSES:
-        to_email = To(to_address)
-        ses.send_html_email( to = to_address, subject = subject, content = message_body_html)
+        ses.send_html_email( to_address = to_address, subject = subject, content = message_body_html)
 
 print('---------------------------------------------------\n')
 print(message_body_plain)
