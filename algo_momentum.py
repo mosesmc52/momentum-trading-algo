@@ -262,81 +262,93 @@ if market_weight:
 # if not bull market invest in cash
 if round(market_weight, 3) < 1.0 and not is_bull_market:  # this section manages bear market
 
-    etf_history = history(db_session = db_session, tickers = config['model']['bear_etfs'],  days=config['model']['trend_window_days'])
 
-    # retrieve bear etf with the highest momentum score
-    data_end = -1 * (config['model']['bear_score_exclude_days'] + 1) # exclude most recent data
-    etf_mom_start = -1 * (config['model']['bear_score_window_days'] + config['model']['bear_score_exclude_days'])
-    etf_mom_start = etf_history[etf_mom_start:data_end]
+    momentum_list = pd.DataFrame(columns=['ticker', 'score'])
+    for ticker in config['model']['bear_etfs'].split(','):
+        etf_history = history(db_session = db_session, tickers = [ticker],  days=config['model']['trend_window_days'])
 
-    momentum_list = etf_mom_start.apply(momentum_score)
-    momentum_list = momentum_list.dropna()
-    sel_etf = momentum_list.sort_values(ascending = False).index[0]
+        # retrieve bear etf with the highest momentum score
+        data_end = -1 * (int(config['model']['bear_score_exclude_days']) + 1) # exclude most recent data
+        etf_mom_start = -1 * (int(config['model']['bear_score_window_days']) + int(config['model']['bear_score_exclude_days']))
+        etf_mom_start = etf_history[etf_mom_start:data_end]
+
+        score = momentum_score(etf_mom_start['close'])
+        if score > 0:
+            momentum_list = momentum_list.append({'ticker': ticker,
+                                'score': score},
+                                ignore_index=True)
 
     weight = 1.0 - market_weight
     bear_weight = 0.0
+    if len(momentum_list):
+        sel_etf = momentum_list.sort_values(by=[ 'score'], ascending = False).iloc[0]['ticker']
 
-    if (TMOM(etf_history[sel_etf]['close']) > TMOM(cash_history['close'])):
-        bear_weight += weight / 2.0
 
-    if (etf_history[sel_etf]['close'].tail(1).iloc[0] > etf_history[sel_etf]['close'].mean()):
-        bear_weight += weight / 2.0
 
-    print('{0} weight: {1}'.format( sel_etf , bear_weight ))
-    price = etf_history[sel_etf].tail(1)['close'][0]
-    qty = share_quantity(price = price, weight = bear_weight, portfolio_value = portfolio_value)
+        etf_history = history(db_session = db_session, tickers = [sel_etf],  days=config['model']['trend_window_days'])
 
-    # buy bear_etf
-    if sel_etf in current_positions:
-        # bear ETF alread has a position, update the position
-        diff = qty - int(api.get_position(sel_etf).qty)
 
-        updated_positions.append({
+        if (TMOM(etf_history['close']) > TMOM(cash_history['close'])):
+            bear_weight += weight / 2.0
+
+        if (etf_history['close'].tail(1).iloc[0] > etf_history['close'].mean()):
+            bear_weight += weight / 2.0
+
+        print('{0} weight: {1}'.format( sel_etf , bear_weight ))
+        price = etf_history.tail(1)['close'][0]
+        qty = share_quantity(price = price, weight = bear_weight, portfolio_value = portfolio_value)
+
+        # buy bear_etf
+        if sel_etf in current_positions:
+            # bear ETF alread has a position, update the position
+            diff = qty - int(api.get_position(sel_etf).qty)
+
+            updated_positions.append({
+                'security': sel_etf,
+                'action':'buy' if diff > 0 else 'sell',
+                'qty': qty,
+                'diff': diff
+            })
+
+            if LIVE_TRADE:
+                # check quanity for existing position
+
+                # buy or sell the difference
+                if diff > 0:
+                    api.submit_order(
+                        symbol=sel_etf,
+                        time_in_force='day',
+                        side='buy',
+                        type='market',
+                        qty=diff,
+                    )
+
+                elif diff < 0:
+                    api.submit_order(
+                        symbol=sel_etf,
+                        time_in_force='day',
+                        side='sell',
+                        type='market',
+                        qty=abs(diff),
+                    )
+
+        else:
+            # bear ETF doesn't have a position
+            updated_positions.append({
             'security': sel_etf,
-            'action':'buy' if diff > 0 else 'sell',
+            'action':'buy',
             'qty': qty,
-            'diff': diff
-        })
+            'diff': qty
+            })
 
-        if LIVE_TRADE:
-            # check quanity for existing position
-
-            # buy or sell the difference
-            if diff > 0:
+            if LIVE_TRADE:
                 api.submit_order(
                     symbol=sel_etf,
                     time_in_force='day',
                     side='buy',
                     type='market',
-                    qty=diff,
+                    qty=qty,
                 )
-
-            elif diff < 0:
-                api.submit_order(
-                    symbol=sel_etf,
-                    time_in_force='day',
-                    side='sell',
-                    type='market',
-                    qty=abs(diff),
-                )
-
-    else:
-        # bear ETF doesn't have a position
-        updated_positions.append({
-        'security': sel_etf,
-        'action':'buy',
-        'qty': qty,
-        'diff': qty
-        })
-
-        if LIVE_TRADE:
-            api.submit_order(
-                symbol=sel_etf,
-                time_in_force='day',
-                side='buy',
-                type='market',
-                qty=qty,
-            )
 
     # insert in cash
     cash_history = history(db_session = db_session, tickers = config['model']['cash'],  days=config['model']['trend_window_days'])
