@@ -84,7 +84,7 @@ for company in companies:
         continue
 
     inf_discr, is_quality = momentum_quality(equity_history['close'], min_inf_discr = config['model']['min_inf_discr'])
-    if not is_quality and company['Symbol'] not in current_positions:
+    if not is_quality:
         log('{0}, quality failed'.format(company['Symbol']))
         continue
 
@@ -93,7 +93,7 @@ for company in companies:
     momentum_start = -1 * (int(config['model']['score_window_days']) + int(config['model']['score_exclude_days']))
     momentum_hist = equity_history[momentum_start:data_end]
     score = momentum_score(equity_history['close']).mean()
-    if score <= float(config['model']['minimum_score_momentum']) and company['Symbol'] not in current_positions:
+    if score <= float(config['model']['minimum_score_momentum']):
         log('{0}, score {0} less than minimum'.format(company['Symbol'], score))
         continue
 
@@ -121,7 +121,7 @@ for position in api.list_positions():
     bear_etfs.append(config['model']['cash'])
 
     if (position.symbol in bear_etfs and is_bull_market) or \
-        ( position.symbol not in mom_equities.index.tolist() and today.month in [3, 6, 9, 12]):
+        ( position.symbol not in mom_equities.index.tolist() and today.month in [3, 6, 9, 12]  and not position.symbol in bear_etfs):
         if LIVE_TRADE:
             api.submit_order(
                 symbol=position.symbol,
@@ -332,7 +332,7 @@ if round(market_weight, 3) < 1.0 and not is_bull_market:  # this section manages
                         qty=abs(diff),
                     )
 
-        else:
+        elif qty > 0:
             # bear ETF doesn't have a position
             updated_positions.append({
             'security': sel_etf,
@@ -340,6 +340,8 @@ if round(market_weight, 3) < 1.0 and not is_bull_market:  # this section manages
             'qty': qty,
             'diff': qty
             })
+
+
 
             if LIVE_TRADE:
                 api.submit_order(
@@ -391,7 +393,7 @@ if round(market_weight, 3) < 1.0 and not is_bull_market:  # this section manages
                     qty=abs(diff),
                 )
 
-    else:
+    elif qty > 0:
         # cash doesn't have a position
         updated_positions.append({
         'security': config['model']['cash'],
@@ -441,7 +443,12 @@ if EMAIL_POSITIONS:
                     secret_key= os.environ.get('AWS_SES_SECRET_ACCESS_KEY'),
                     from_address = os.environ.get('FROM_ADDRESS')
                     )
-    subject = "Your Monthly Momentum Algo Position Report"
+    if LIVE_TRADE:
+        status = 'Live'
+    else:
+        status = 'Test'
+
+    subject = "Your Monthly Momentum Algo Position Report - {}".format( status )
 
     for to_address in TO_ADDRESSES:
         ses.send_html_email( to_address = to_address, subject = subject, content = message_body_html)
