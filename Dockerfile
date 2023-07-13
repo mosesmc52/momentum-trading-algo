@@ -7,12 +7,18 @@ ENV PYTHONUNBUFFERED 1
 ENV PYTHONDONTWRITEBYTECODE 1
 
 WORKDIR /app
-COPY ./requirements.txt ./
+COPY ./Pipfile ./
+COPY ./Pipfile.lock ./
 
-RUN pip install --no-cache-dir -r requirements.txt
-RUN rm requirements.txt
+# install Python Dependencies
+RUN pip install pipenv
+RUN pipenv install --system --deploy --ignore-pipfile --verbose
+RUN rm Pipfile
+RUN rm Pipfile.lock
 
 COPY . /app
+RUN chmod +x /app/docker_entrypoint.sh
+RUN chmod +x /app/invest.sh
 
 # Install cron
 RUN apt-get update
