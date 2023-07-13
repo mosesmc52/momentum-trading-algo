@@ -289,5 +289,13 @@ def TMOM(prices_df):
     return prices_df.pct_change().cumsum().tail(1)[0]
 
 
+def High52Week(price_df):
+    return price_df["close"].rolling(window=52 * 7, min_periods=1).max()[0]
+
+
+def NearHigh(price_df):
+    return price_df["close"].tail(1).iloc[0] / High52Week(price_df)
+
+
 def share_quantity(price, weight, portfolio_value):
     return math.floor((portfolio_value * weight) / price)

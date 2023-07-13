@@ -20,6 +20,7 @@ sentry_sdk.init(dsn=os.getenv("SENTRY_DSN"))
 
 from helper import (
     TMOM,
+    NearHigh,
     history,
     momentum_quality,
     momentum_score,
@@ -48,7 +49,7 @@ current_positions = []
 not_tradeable_positions = []
 for position in api.list_positions():
     asset = api.get_asset(position.symbol)
-    if asset.tradable == True:
+    if asset.tradable is True:
         current_positions.append(position.symbol)
     else:
         log("{0} is not tradable, skipping".format(position.symbol), "error")
@@ -98,7 +99,7 @@ for company in companies:
 
     # if stock traded > 100 day MA
     if (
-        market_history["close"].tail(1).iloc[0]
+        equity_history["close"].tail(1).iloc[0]
         <= equity_history["close"][len(equity_history["close"]) - 100 :].mean()
     ):
         log(
@@ -143,13 +144,21 @@ for company in companies:
 
     log(company["Symbol"], "success")
     mom_equities = mom_equities.append(
-        {"ticker": company["Symbol"], "inf_discr": inf_discr, "score": score},
+        {
+            "ticker": company["Symbol"],
+            "inf_discr": inf_discr,
+            "score": score,
+            "near_high": NearHigh(equity_history),
+            "volitility": volatility(
+                equity_history["close"], vola_window=int(config["model"]["vola_window"])
+            ),
+        },
         ignore_index=True,
     )
 
 mom_equities = mom_equities.set_index(["ticker"])
 ranking_table = mom_equities.sort_values(
-    by=["inf_discr", "score"], ascending=[True, False]
+    by=["volitility", "inf_discr", "score"], ascending=[True, True, False]
 )
 
 log("Ranking Table", "success")
