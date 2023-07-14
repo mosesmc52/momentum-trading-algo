@@ -97,7 +97,16 @@ for company in companies:
         log("{0}, no data".format(company["Symbol"]))
         continue
 
-    # if stock traded > 100 day MA
+    if equity_history["close"].tail(1).iloc[0] >= float(
+        config["model"]["max_allowable_price"]
+    ):
+        log(
+            "{0} greater than max allowable price, skipping".format(company["Symbol"]),
+            "warning",
+        )
+        continue
+
+    # check if stock traded > 100 day MA
     if (
         equity_history["close"].tail(1).iloc[0]
         <= equity_history["close"][len(equity_history["close"]) - 100 :].mean()
