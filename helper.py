@@ -114,7 +114,23 @@ def parse_wiki_sp_consituents(sources=[]):
             "success",
         )
         companies += companies600
+    if "aristocrats" in sources:
+        log("\nParsing S&P 500 Dividend Aristocrats", "info")
+        response = requests.get(
+            "https://en.wikipedia.org/wiki/S%26P_500_Dividend_Aristocrats"
+        )
+        mainTree = html.fromstring(response.text)
 
+        companiesAristocrats = []
+        for row in mainTree.xpath('//table[contains(@id, "constituents")]/tbody/tr'):
+            if len(row.xpath("td")):
+                companiesAristocrats.append(
+                    {
+                        "Symbol": row.xpath("td[2]/descendant::text()")[0].strip(),
+                        "Name": row.xpath("td[1]/descendant::text()")[0].strip(),
+                    }
+                )
+        companies += companiesAristocrats
     return companies
 
 
