@@ -69,16 +69,14 @@ market_history = history(
     tickers=[config["model"]["market"]],
     days=config["model"]["trend_window_days"],
 )
-cash_history = history(
-    db_session=db_session,
-    tickers=[config["model"]["cash"]],
-    days=config["model"]["trend_window_days"],
-)
-
 
 is_bull_market = (
     market_history["close"].tail(1).iloc[0] > market_history["close"].mean()
-) and (TMOM(market_history["close"]) > TMOM(cash_history["close"]))
+)
+market_mean_percent_difference = 1 - (
+    market_history.tail(1).iloc[0] / market_history.mean()
+)
+
 if is_bull_market:
     log("Bull Market", "success")
 else:
@@ -86,6 +84,7 @@ else:
 
 # read s&p 500, 400 companies into pandas dataframe
 companies = parse_wiki_sp_consituents(os.getenv("SP_CONSITUENTS").split(","))
+
 
 mom_equities = pd.DataFrame(columns=["ticker", "inf_discr", "score"])
 for company in companies:
@@ -112,19 +111,25 @@ for company in companies:
         <= equity_history["close"][len(equity_history["close"]) - 100 :].mean()
     ):
         log(
-            "{0} is trading below 100 day moving average, skipping".format(
-                company["Symbol"]
+            "{0} is trading below {1} day moving average, skipping".format(
+                company["Symbol"], config["model"]["slope_window_days"]
             ),
             "warning",
         )
         continue
 
     # if stock moved > 15% in the past 90 days remove
-    returns = equity_history["close"][len(equity_history["close"]) - 90 :].pct_change()
-    if len(returns[(returns <= -0.15) | (returns > 0.15)]):
+    returns = (
+        equity_history["close"][
+            len(equity_history["close"]) - config["model"]["slope_window_days"] :
+        ]
+        .pct_change()
+        .abs()
+    )
+    if len(returns[(returns > config["model"]["max_stock_gap"])]):
         log(
-            "{0} moved greater than 15% in the past 90 days, skipping".format(
-                company["Symbol"]
+            "{0} moved greater than 15% in the past {1} days, skipping".format(
+                company["Symbol"], config["model"]["slope_window_days"]
             ),
             "warning",
         )
@@ -137,15 +142,7 @@ for company in companies:
         log("{0}, quality failed".format(company["Symbol"]))
         continue
 
-    # calculate momentum score
-    data_end = -1 * (
-        int(config["model"]["score_exclude_days"]) + 1
-    )  # exclude most recent data
-    momentum_start = -1 * (
-        int(config["model"]["score_window_days"])
-        + int(config["model"]["score_exclude_days"])
-    )
-    momentum_hist = equity_history[momentum_start:data_end]
+    momentum_hist = equity_history[slope_window_days:data_end]
     score = momentum_score(equity_history["close"]).mean()
     if score <= float(config["model"]["minimum_score_momentum"]):
         log("{0}, score {0} less than minimum".format(company["Symbol"], score))
@@ -165,6 +162,12 @@ for company in companies:
         ignore_index=True,
     )
 
+# include equities lower than 0.8 near high
+# if str2bool(os.getenv("FILTER_NEARHIGH", False)):
+#     mom_equities = mom_equities[
+#         mom_equities["near_high"] < config["model"]["maximum_near_high"]
+#     ]
+
 mom_equities = mom_equities.set_index(["ticker"])
 ranking_table = mom_equities.sort_values(
     by=["volitility", "inf_discr", "score"], ascending=[True, True, False]
@@ -181,14 +184,7 @@ for position in api.list_positions():
         log("{0} is not tradable, skipping".format(position.symbol), "error")
         continue
 
-    bear_etfs = config["model"]["bear_etfs"].split(",")
-    bear_etfs.append(config["model"]["cash"])
-
-    if (position.symbol in bear_etfs and is_bull_market) or (
-        position.symbol not in mom_equities.index.tolist()
-        and today.month in [3, 6, 9, 12]
-        and not position.symbol in bear_etfs
-    ):
+    if position.symbol not in mom_equities.index.tolist():
         if LIVE_TRADE:
             api.submit_order(
                 symbol=position.symbol,
@@ -227,6 +223,7 @@ for ticker, _ in new_portfolio.iterrows():
         ignore_index=True,
     )
 
+
 # calculate weights
 position_volatility = position_volatility.set_index(["ticker"])
 inv_vola = 1 / position_volatility["volatility"]
@@ -239,270 +236,122 @@ market_weight = 0.0
 portfolio_value = round(float(account.equity), 3)
 positions = 0
 
-updated_positions = []
-for security, data in position_volatility.iterrows():
-    asset = api.get_asset(security)
-    if asset.tradable == False:
-        log("{0} is not tradable, skipping".format(security), "error")
-    elif security in kept_positions:
-        qty = share_quantity(
-            price=data["price"], weight=data["weight"], portfolio_value=portfolio_value
-        )
+if is_bull_market:
+    updated_positions = []
+    for security, data in position_volatility.iterrows():
+        asset = api.get_asset(security)
+        if asset.tradable == False:
+            log("{0} is not tradable, skipping".format(security), "error")
+        elif security in kept_positions:
+            qty = share_quantity(
+                price=data["price"],
+                weight=data["weight"],
+                portfolio_value=portfolio_value,
+            )
 
-        if qty:
-            diff = qty - int(api.get_position(security).qty)
-            if LIVE_TRADE:
-                # check quanity for existing position
+            if qty:
+                diff = qty - int(api.get_position(security).qty)
+                if LIVE_TRADE:
+                    # check quanity for existing position
 
-                # buy or sell the difference
-                if diff > 0:
+                    # buy or sell the difference
+                    if diff > 0:
+                        api.submit_order(
+                            symbol=security,
+                            time_in_force="day",
+                            side="buy",
+                            type="market",
+                            qty=diff,
+                        )
+
+                    elif diff < 0:
+                        api.submit_order(
+                            symbol=security,
+                            time_in_force="day",
+                            side="sell",
+                            type="market",
+                            qty=abs(diff),
+                        )
+
+                updated_positions.append(
+                    {
+                        "security": security,
+                        "action": "buy" if diff > 0 else "sell",
+                        "qty": qty,
+                        "diff": diff,
+                    }
+                )
+
+                market_weight += data["weight"]
+                log("{0}: {1}".format(security, qty), "info")
+                positions += 1
+
+            else:
+                updated_positions.append(
+                    {
+                        "security": security,
+                        "action": "buy" if diff > 0 else "sell",
+                        "qty": 0,
+                        "diff": -int(api.get_position(security).qty),
+                    }
+                )
+
+                log("{0}: 0".format(security), "warning")
+        elif is_bull_market:
+            qty = share_quantity(
+                price=data["price"],
+                weight=data["weight"],
+                portfolio_value=portfolio_value,
+            )
+            if qty:
+                if LIVE_TRADE:
                     api.submit_order(
                         symbol=security,
                         time_in_force="day",
                         side="buy",
                         type="market",
-                        qty=diff,
+                        qty=qty,
                     )
 
-                elif diff < 0:
-                    api.submit_order(
-                        symbol=security,
-                        time_in_force="day",
-                        side="sell",
-                        type="market",
-                        qty=abs(diff),
-                    )
-
-            updated_positions.append(
-                {
-                    "security": security,
-                    "action": "buy" if diff > 0 else "sell",
-                    "qty": qty,
-                    "diff": diff,
-                }
-            )
-
-            market_weight += data["weight"]
-            log("{0}: {1}".format(security, qty), "info")
-            positions += 1
-
-        else:
-            updated_positions.append(
-                {
-                    "security": security,
-                    "action": "buy" if diff > 0 else "sell",
-                    "qty": 0,
-                    "diff": -int(api.get_position(security).qty),
-                }
-            )
-
-            log("{0}: 0".format(security), "warning")
-    elif is_bull_market:
-        qty = share_quantity(
-            price=data["price"], weight=data["weight"], portfolio_value=portfolio_value
-        )
-        if qty:
-            if LIVE_TRADE:
-                api.submit_order(
-                    symbol=security,
-                    time_in_force="day",
-                    side="buy",
-                    type="market",
-                    qty=qty,
+                updated_positions.append(
+                    {"security": security, "action": "buy", "qty": qty, "diff": qty}
                 )
 
-            updated_positions.append(
-                {"security": security, "action": "buy", "qty": qty, "diff": qty}
-            )
-
-            market_weight += data["weight"]
-            log("{0}: {1}".format(security, qty), "info")
-            positions += 1
-        else:
-            updated_positions.append(
-                {"security": security, "action": "buy", "qty": 0, "diff": 0}
-            )
-
-            log("{0}: 0".format(security), "warning")
-
-print("desired portfolio size: {0}".format(len(new_portfolio)))
-print("position size: {0}".format(positions))
-
-if market_weight:
-    print("Market weight: {0}".format(round(market_weight, 3)))
-
-# if not bull market invest in cash
-if (
-    round(market_weight, 3) < 1.0 and not is_bull_market
-):  # this section manages bear market
-    momentum_list = pd.DataFrame(columns=["ticker", "score"])
-    for ticker in config["model"]["bear_etfs"].split(","):
-        etf_history = history(
-            db_session=db_session,
-            tickers=[ticker],
-            days=config["model"]["trend_window_days"],
-        )
-
-        # retrieve bear etf with the highest momentum score
-        data_end = -1 * (
-            int(config["model"]["bear_score_exclude_days"]) + 1
-        )  # exclude most recent data
-        etf_mom_start = -1 * (
-            int(config["model"]["bear_score_window_days"])
-            + int(config["model"]["bear_score_exclude_days"])
-        )
-        etf_mom_start = etf_history[etf_mom_start:data_end]
-
-        score = momentum_score(etf_mom_start["close"])
-        if score > 0:
-            momentum_list = momentum_list.append(
-                {"ticker": ticker, "score": score}, ignore_index=True
-            )
-
-    weight = 1.0 - market_weight
-    bear_weight = 0.0
-    if len(momentum_list):
-        sel_etf = momentum_list.sort_values(by=["score"], ascending=False).iloc[0][
-            "ticker"
-        ]
-
-        etf_history = history(
-            db_session=db_session,
-            tickers=[sel_etf],
-            days=config["model"]["trend_window_days"],
-        )
-
-        if TMOM(etf_history["close"]) > TMOM(cash_history["close"]):
-            bear_weight += weight / 2.0
-
-        if etf_history["close"].tail(1).iloc[0] > etf_history["close"].mean():
-            bear_weight += weight / 2.0
-
-        print("{0} weight: {1}".format(sel_etf, bear_weight))
-        price = etf_history.tail(1)["close"][0]
-        qty = share_quantity(
-            price=price, weight=bear_weight, portfolio_value=portfolio_value
-        )
-
-        # buy bear_etf
-        if sel_etf in current_positions:
-            # bear ETF alread has a position, update the position
-            diff = qty - int(api.get_position(sel_etf).qty)
-
-            updated_positions.append(
-                {
-                    "security": sel_etf,
-                    "action": "buy" if diff > 0 else "sell",
-                    "qty": qty,
-                    "diff": diff,
-                }
-            )
-
-            if LIVE_TRADE:
-                # check quanity for existing position
-
-                # buy or sell the difference
-                if diff > 0:
-                    api.submit_order(
-                        symbol=sel_etf,
-                        time_in_force="day",
-                        side="buy",
-                        type="market",
-                        qty=diff,
-                    )
-
-                elif diff < 0:
-                    api.submit_order(
-                        symbol=sel_etf,
-                        time_in_force="day",
-                        side="sell",
-                        type="market",
-                        qty=abs(diff),
-                    )
-
-        elif qty > 0:
-            # bear ETF doesn't have a position
-            updated_positions.append(
-                {"security": sel_etf, "action": "buy", "qty": qty, "diff": qty}
-            )
-
-            if LIVE_TRADE:
-                api.submit_order(
-                    symbol=sel_etf,
-                    time_in_force="day",
-                    side="buy",
-                    type="market",
-                    qty=qty,
+                market_weight += data["weight"]
+                log("{0}: {1}".format(security, qty), "info")
+                positions += 1
+            else:
+                updated_positions.append(
+                    {"security": security, "action": "buy", "qty": 0, "diff": 0}
                 )
 
-    # insert in cash
-    cash_history = history(
-        db_session=db_session,
-        tickers=config["model"]["cash"],
-        days=config["model"]["trend_window_days"],
-    )
+                log("{0}: 0".format(security), "warning")
 
-    cash_weight = weight - bear_weight
-    print("cash weight: %s" % (cash_weight))
-    price = cash_history.tail(1)["close"][0]
-    qty = share_quantity(
-        price=price, weight=cash_weight, portfolio_value=portfolio_value
-    )
-    # buy cash
-
-    # check quanity for existing position
-    if config["model"]["cash"] in current_positions:
-        # cash has a position update
-        diff = qty - int(api.get_position(config["model"]["cash"]).qty)
-
-        updated_positions.append(
-            {
-                "security": config["model"]["cash"],
-                "action": "buy" if diff > 0 else "sell",
-                "qty": qty,
-                "diff": diff,
-            }
-        )
-
-        if LIVE_TRADE:
-            # buy or sell the difference
-            if diff > 0:
+    print("desired portfolio size: {0}".format(len(new_portfolio)))
+    print("position size: {0}".format(positions))
+else:
+    if (
+        market_mean_percent_difference
+        > config["model"]["maximum_market_mean_percent_difference"]
+    ):
+        # drop all market positions
+        for position in kept_positions:
+            if LIVE_TRADE:
                 api.submit_order(
-                    symbol=config["model"]["cash"],
-                    time_in_force="day",
-                    side="buy",
-                    type="market",
-                    qty=diff,
-                )
-
-            elif diff < 0:
-                api.submit_order(
-                    symbol=config["model"]["cash"],
+                    symbol=position.symbol,
                     time_in_force="day",
                     side="sell",
                     type="market",
-                    qty=abs(diff),
+                    qty=position.qty,
                 )
+            log("drop postion {0}".format(position.symbol), "info")
+    else:
+        # keep positions the same
+        print("portfolio size: {0}".format(len(kept_positions)))
+        updated_positions = kept_positions
 
-    elif qty > 0:
-        # cash doesn't have a position
-        updated_positions.append(
-            {
-                "security": config["model"]["cash"],
-                "action": "buy",
-                "qty": qty,
-                "diff": qty,
-            }
-        )
-
-        if LIVE_TRADE:
-            api.submit_order(
-                symbol=config["model"]["cash"],
-                time_in_force="day",
-                side="buy",
-                type="market",
-                qty=qty,
-            )
+if market_weight:
+    print("Market weight: {0}".format(round(market_weight, 3)))
 
 # Email Positions
 EMAIL_POSITIONS = str2bool(os.getenv("EMAIL_POSITIONS", False))
