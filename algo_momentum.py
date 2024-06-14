@@ -85,7 +85,9 @@ else:
 companies = parse_wiki_sp_consituents(os.getenv("SP_CONSITUENTS").split(","))
 
 
-mom_equities = pd.DataFrame(columns=["ticker", "inf_discr", "score"])
+mom_equities = pd.DataFrame(
+    columns=["ticker", "inf_discr", "score", "near_high", "volitility"]
+)
 for company in companies:
     # calculate inference
     equity_history = history(
@@ -160,6 +162,7 @@ for company in companies:
         },
         ignore_index=True,
     )
+
 
 # include equities lower than 0.8 near high
 # if str2bool(os.getenv("FILTER_NEARHIGH", False)):
