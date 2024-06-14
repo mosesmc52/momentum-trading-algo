@@ -1,4 +1,4 @@
-FROM python:3.11.3
+FROM python:3.12
 
 # to the terminal with out buffering it first
 ENV PYTHONUNBUFFERED 1
@@ -7,14 +7,12 @@ ENV PYTHONUNBUFFERED 1
 ENV PYTHONDONTWRITEBYTECODE 1
 
 WORKDIR /app
-COPY ./Pipfile ./
-COPY ./Pipfile.lock ./
+COPY poetry.lock pyproject.toml /app/
 
 # install Python Dependencies
-RUN pip install pipenv
-RUN pipenv install --system --deploy --ignore-pipfile --verbose
-RUN rm Pipfile
-RUN rm Pipfile.lock
+RUN pip3 install poetry
+RUN poetry config virtualenvs.create false
+RUN poetry install  --no-interaction
 
 COPY . /app
 RUN chmod +x /app/docker_entrypoint.sh

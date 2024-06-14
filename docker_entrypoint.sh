@@ -1,5 +1,12 @@
 #!/bin/bash
 
+# create sqllitedb
+echo "create sqllitedb"
+python -c '
+from database import ( init_db )
+init_db()
+'
+
 # Start the run once job.
 echo "Momentum Algo Docker container has been started"
 

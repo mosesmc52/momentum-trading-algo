@@ -1,6 +1,7 @@
 """
 Helper functions.
 """
+
 import math
 import time
 from datetime import datetime, timedelta
@@ -102,8 +103,8 @@ def parse_wiki_sp_consituents(sources=[]):
             if len(row.xpath("td")):
                 companies600.append(
                     {
-                        "Symbol": row.xpath("td[2]/descendant::text()")[0].strip(),
-                        "Name": row.xpath("td[1]/descendant::text()")[0].strip(),
+                        "Symbol": row.xpath("td[1]/descendant::text()")[0].strip(),
+                        "Name": row.xpath("td[2]/descendant::text()")[0].strip(),
                     }
                 )
 
@@ -150,7 +151,7 @@ def price_history(api, ticker, start_date, end_date, print_test=False):
 
 def ingest_security(alpaca_api, db_session, ticker, name="", type="stock"):
     now = datetime.now()
-    end_date = now - timedelta(hours=24)
+    end_date = now - timedelta(hours=48)
 
     log("\n{0}".format(ticker), "success")
     # insert security in database if doesn't exist

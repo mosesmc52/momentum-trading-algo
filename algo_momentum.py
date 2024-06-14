@@ -19,7 +19,6 @@ from SES import AmazonSES
 sentry_sdk.init(dsn=os.getenv("SENTRY_DSN"))
 
 from helper import (
-    TMOM,
     NearHigh,
     history,
     momentum_quality,
@@ -32,7 +31,7 @@ from helper import (
 from log import log
 
 # constants
-DAYS_IN_YEAR = 365
+TRADING_DAYS_IN_YEAR = 252
 
 # live trade
 LIVE_TRADE = str2bool(os.getenv("LIVE_TRADE", False))
@@ -90,7 +89,7 @@ mom_equities = pd.DataFrame(columns=["ticker", "inf_discr", "score"])
 for company in companies:
     # calculate inference
     equity_history = history(
-        db_session=db_session, tickers=[company["Symbol"]], days=DAYS_IN_YEAR
+        db_session=db_session, tickers=[company["Symbol"]], days=TRADING_DAYS_IN_YEAR
     )
     if not len(equity_history):
         log("{0}, no data".format(company["Symbol"]))
