@@ -120,12 +120,12 @@ for company in companies:
     # if stock moved > 15% in the past 90 days remove
     returns = (
         equity_history["close"][
-            len(equity_history["close"]) - config["model"]["slope_window_days"] :
+            len(equity_history["close"]) - int(config["model"]["slope_window_days"]) :
         ]
         .pct_change()
         .abs()
     )
-    if len(returns[(returns > config["model"]["max_stock_gap"])]):
+    if len(returns[(returns > float(config["model"]["max_stock_gap"]))]):
         log(
             "{0} moved greater than 15% in the past {1} days, skipping".format(
                 company["Symbol"], config["model"]["slope_window_days"]
