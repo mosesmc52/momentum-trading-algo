@@ -6,6 +6,9 @@ python -c '
 from database import ( init_db )
 init_db()
 '
+# ingest Equities
+echo "ingest stock equities"
+python ingest.py
 
 # Start the run once job.
 echo "Momentum Algo Docker container has been started"
