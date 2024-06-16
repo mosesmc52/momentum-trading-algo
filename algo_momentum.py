@@ -72,8 +72,12 @@ market_history = history(
 is_bull_market = (
     market_history["close"].tail(1).iloc[0] > market_history["close"].mean()
 )
+
+# this value measures the difference between the current price of the market and the average of the history that is retrieved
+# which is TRADING_DAYS_IN_YEAR. If the value is positive the price of the market is below the mean of the market and
+# is in a bear state
 market_mean_percent_difference = 1 - (
-    market_history.tail(1).iloc[0] / market_history.mean()
+    market_history["close"].tail(1).iloc[0] / market_history.mean()
 )
 
 if is_bull_market:
