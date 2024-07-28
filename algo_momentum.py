@@ -18,9 +18,16 @@ from SES import AmazonSES
 # find on https://docs.sentry.io/error-reporting/quickstart/?platform=python
 sentry_sdk.init(dsn=os.getenv("SENTRY_DSN"))
 
-from helper import (NearHigh, history, momentum_quality, momentum_score,
-                    parse_wiki_sp_consituents, share_quantity, str2bool,
-                    volatility)
+from helper import (
+    NearHigh,
+    history,
+    momentum_quality,
+    momentum_score,
+    parse_wiki_sp_consituents,
+    share_quantity,
+    str2bool,
+    volatility,
+)
 from log import log
 
 # constants
@@ -53,7 +60,7 @@ db_session = sqlalchemy.orm.Session(bind=engine)
 
 # retreive configuration parameters
 config = configparser.ConfigParser()
-config.read(f"{os.getenv("CONFIG_FILE_ABSOLUTE_PATH")}/algo_settings.cfg")
+config.read(f'{os.getenv("CONFIG_FILE_ABSOLUTE_PATH")}/algo_settings.cfg')
 
 # read S&P etf
 market_history = history(
