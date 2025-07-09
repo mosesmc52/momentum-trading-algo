@@ -245,12 +245,15 @@ def momentum_quality(ts, min_inf_discr=0.0):
     return inf_discr, False
 
 
-def momentum_score(ts):
+def momentum_score(ts, trading_days=252):
     """
     Input:  Price time series.
     Output: Annualized exponential regression slope,
             multiplied by the R2
     """
+    if len(ts) < 2 or ts.isnull().any():
+        return np.nan
+
     # Make a list of consecutive numbers
     x = np.arange(len(ts))
     # Get logs
@@ -258,7 +261,7 @@ def momentum_score(ts):
     # Calculate regression values
     slope, intercept, r_value, p_value, std_err = stats.linregress(x, log_ts)
     # Annualize percent
-    annualized_slope = (np.power(np.exp(slope), 252) - 1) * 100
+    annualized_slope = (np.power(np.exp(slope), trading_days) - 1) * 100
     # Adjust for fitness
     score = annualized_slope * (r_value**2)
     return score
