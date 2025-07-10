@@ -12,7 +12,7 @@ COPY poetry.lock pyproject.toml /app/
 # install Python Dependencies
 RUN pip3 install poetry
 RUN poetry config virtualenvs.create false
-RUN poetry install  --no-interaction
+RUN poetry install --no-interaction --no-root
 
 COPY . /app
 RUN chmod +x /app/docker_entrypoint.sh
