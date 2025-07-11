@@ -1,6 +1,6 @@
 import configparser
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import alpaca_trade_api as tradeapi
 import models
@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 import sqlalchemy
 from dotenv import find_dotenv, load_dotenv
+from fredapi import Fred
 
 load_dotenv(find_dotenv())
 
@@ -25,6 +26,7 @@ from helper import (
     share_quantity,
     str2bool,
     volatility,
+    yoy,
 )
 from log import log
 
@@ -32,6 +34,30 @@ from log import log
 TRADING_DAYS_IN_YEAR = 252
 BUY = "buy"
 SELL = "sell"
+
+
+fred = Fred(api_key=os.getenv("FRED_API_KEY"))
+
+now = datetime.now()
+extra_parameters = {
+    "observation_start": (now - timedelta(days=600)).strftime("%Y-%m-%d"),
+    "observation_end": now.strftime("%Y-%m-%d"),
+}
+
+MACRO = fred.get_series("RRSFS", **extra_parameters)
+MACRO.name = "MACRO"
+
+df = pd.concat([MACRO], axis=1)
+full_range = pd.date_range(start=df.index.min(), end=df.index.max(), freq="D")
+df = df.reindex(full_range)
+df.ffill(inplace=True)
+
+MACRO_YOY = yoy(
+    df["MACRO"].tail(1).iloc[0],
+    df.loc[df["MACRO"].tail(1).index - pd.DateOffset(years=1), "MACRO"].iloc[0],
+)
+
+# read S&P etf
 
 # live trade
 LIVE_TRADE = str2bool(os.getenv("LIVE_TRADE", False))
@@ -64,7 +90,7 @@ db_session = Session()
 config = configparser.ConfigParser()
 config.read(f'{os.getenv("CONFIG_FILE_ABSOLUTE_PATH")}/algo_settings.cfg')
 
-# read S&P etf
+
 market_history = history(
     engine=engine,
     db_session=db_session,
@@ -74,6 +100,7 @@ market_history = history(
 
 is_bull_market = (
     market_history["close"].tail(1).iloc[0] > market_history["close"].mean()
+    and MACRO_YOY > 0.0
 )
 
 

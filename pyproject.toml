@@ -16,6 +16,7 @@ scipy = "^1.13.1"
 alpaca-trade-api = "^3.2.0"
 lxml = "^5.2.2"
 sqlalchemy = "^2.0.41"
+fredapi = "^0.5.2"
 
 
 [build-system]

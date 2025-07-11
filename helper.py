@@ -269,3 +269,7 @@ def history(engine, db_session, tickers, days):
 
 def share_quantity(price, weight, portfolio_value):
     return math.floor((portfolio_value * weight) / price)
+
+
+def yoy(current_yr, previous_yr):
+    return current_yr - previous_yr
