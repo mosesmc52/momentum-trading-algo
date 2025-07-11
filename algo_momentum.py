@@ -35,7 +35,7 @@ TRADING_DAYS_IN_YEAR = 252
 BUY = "buy"
 SELL = "sell"
 
-
+# load macro-economic event check for bull market
 fred = Fred(api_key=os.getenv("FRED_API_KEY"))
 
 now = datetime.now()
@@ -57,7 +57,6 @@ MACRO_YOY = yoy(
     df.loc[df["MACRO"].tail(1).index - pd.DateOffset(years=1), "MACRO"].iloc[0],
 )
 
-# read S&P etf
 
 # live trade
 LIVE_TRADE = str2bool(os.getenv("LIVE_TRADE", False))
@@ -71,6 +70,7 @@ api = tradeapi.REST(
 )  # or use ENV Vars shown below
 account = api.get_account()
 
+# retrieve all tradable positions
 current_positions = []
 not_tradeable_positions = []
 for position in api.list_positions():
@@ -90,6 +90,7 @@ db_session = Session()
 config = configparser.ConfigParser()
 config.read(f'{os.getenv("CONFIG_FILE_ABSOLUTE_PATH")}/algo_settings.cfg')
 
+# read S&P etf
 
 market_history = history(
     engine=engine,
@@ -155,9 +156,6 @@ for company in companies:
             "warning",
         )
         continue
-
-    slope_window_days = int(config["model"]["slope_window_days"])
-    data_end = len(equity_history)
 
     score = momentum_score(equity_history["close"])
     if score <= float(config["model"]["minimum_score_momentum"]):
