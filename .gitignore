@@ -130,4 +130,5 @@ dmypy.json
 
 # ignore files
 *.csv
-*.db
+*.db*
+*.txt

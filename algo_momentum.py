@@ -59,7 +59,8 @@ for position in api.list_positions():
 
 # open sqllite db
 engine = sqlalchemy.create_engine("sqlite:///securities.db")
-db_session = sqlalchemy.orm.Session(bind=engine)
+Session = sqlalchemy.orm.sessionmaker(bind=engine)
+db_session = Session()
 
 # retreive configuration parameters
 config = configparser.ConfigParser()
@@ -67,6 +68,7 @@ config.read(f'{os.getenv("CONFIG_FILE_ABSOLUTE_PATH")}/algo_settings.cfg')
 
 # read S&P etf
 market_history = history(
+    engine=engine,
     db_session=db_session,
     tickers=[config["model"]["market"]],
     days=config["model"]["trend_window_days"],
@@ -96,7 +98,10 @@ mom_equities_data = []
 for company in companies:
     # calculate inference
     equity_history = history(
-        db_session=db_session, tickers=[company["Symbol"]], days=TRADING_DAYS_IN_YEAR
+        engine=engine,
+        db_session=db_session,
+        tickers=[company["Symbol"]],
+        days=TRADING_DAYS_IN_YEAR,
     )
     if not len(equity_history):
         log("{0}, no data".format(company["Symbol"]))
@@ -170,6 +175,15 @@ for company in companies:
     )
 
 mom_equities = pd.DataFrame(mom_equities_data)
+
+if mom_equities.empty:
+    log("No equities passed momentum screening. Exiting.", "error")
+    exit(1)
+
+if "ticker" not in mom_equities.columns:
+    log(f"Missing 'ticker' column. Columns found: {mom_equities.columns}", "error")
+    exit(1)
+
 mom_equities = mom_equities.set_index(["ticker"])
 
 ranking_table = mom_equities.sort_values(
@@ -215,7 +229,10 @@ new_portfolio = pd.concat(
 position_volatility_data = []
 for ticker, _ in new_portfolio.iterrows():
     equity_history = history(
-        db_session=db_session, tickers=[ticker], days=TRADING_DAYS_IN_YEAR
+        engine=engine,
+        db_session=db_session,
+        tickers=[ticker],
+        days=TRADING_DAYS_IN_YEAR,
     )
 
     position_volatility_data.append(

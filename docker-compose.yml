@@ -2,6 +2,10 @@ version: '3.7'
 
 services:
   trading-algo:
+    stdin_open: true
+    tty: true
     build: .
     env_file:
       - ./.env
+    volumes:
+     - .:/app

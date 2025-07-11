@@ -16,6 +16,7 @@ from dateutil import parser as time_parser
 from log import log
 from lxml import html
 from scipy import stats
+from sqlalchemy.sql import text
 
 
 def str2bool(value):
@@ -142,6 +143,7 @@ def price_history(api, ticker, start_date, end_date, print_test=False):
             TimeFrame.Day,
             start_date.strftime("%Y-%m-%d"),
             end_date.strftime("%Y-%m-%d"),
+            adjustment="all",
         )
     except TypeError as te:
         log("{}\n".format(te), "error")
@@ -162,12 +164,10 @@ def ingest_security(alpaca_api, db_session, ticker, name="", type="stock"):
     )
     if not security:
         security = models.Security(ticker=ticker, name=name, type=type)
-
         db_session.add(security)
         db_session.commit()
         start_date = now - timedelta(days=730)
     else:
-        # retrieve latest price data from sql database
         last_price = (
             db_session.query(models.Price)
             .filter(models.Price.security_id == security.id)
@@ -189,6 +189,7 @@ def ingest_security(alpaca_api, db_session, ticker, name="", type="stock"):
     hist = price_history(alpaca_api, ticker, start_date, end_date)
 
     for price in hist:
+
         object = models.Price(
             close=price.c,  # retrieve close price
             date=time_parser.parse(str(price.t)),
@@ -215,7 +216,7 @@ def momentum_quality(ts, min_inf_discr=0.0):
     df = pd.DataFrame()
     lookback_months = 12
 
-    df["return"] = ts.resample("M").last().pct_change()[-lookback_months:-1]
+    df["return"] = ts.resample("ME").last().pct_change()[-lookback_months:-1]
     if not len(df["return"]):
         return False, False
 
@@ -271,36 +272,33 @@ def volatility(ts, vola_window=20):
     return ts.pct_change().rolling(vola_window).std().mean()
 
 
-def history(db_session, tickers, days):
-    # build sqlite queries
+def history(engine, db_session, tickers, days):
     security_query = db_session.query(models.Security).filter(
         models.Security.ticker.in_(tuple(tickers))
     )
 
-    security_ids = []
-    for security in security_query.all():
-        security_ids.append(security.id)
+    security_ids = [s.id for s in security_query.all()]
 
     past = datetime.now() - timedelta(days=int(days))
     price_query = db_session.query(models.Price).filter(
         models.Price.security_id.in_(tuple(security_ids)), models.Price.date >= past
     )
 
-    # build pandas dataframe
-    security_df = pd.read_sql(security_query.statement, db_session.bind)
-    price_df = pd.read_sql(price_query.statement, db_session.bind)
+    # Convert queries to raw SQL strings using text()
+    security_sql = str(
+        security_query.statement.compile(compile_kwargs={"literal_binds": True})
+    )
+    price_sql = str(
+        price_query.statement.compile(compile_kwargs={"literal_binds": True})
+    )
 
-    # merge both dataframes
+    security_df = pd.read_sql(text(security_sql), con=engine)
+    price_df = pd.read_sql(text(price_sql), con=engine)
+
     df = security_df.merge(price_df, left_on="id", right_on="security_id")
-
-    # remove unnessary columns
-    df = df.drop(["security_id", "id_x", "id_y"], axis=1)
-
-    # convert date to datetime object
+    df = df.drop(columns=["security_id", "id_x", "id_y"])
     df["date"] = pd.to_datetime(df["date"])
-
-    # set date to index
-    df = df.set_index(["date"])
+    df = df.set_index("date")
 
     return df
 
