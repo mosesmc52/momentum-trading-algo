@@ -210,42 +210,6 @@ def _pos_neg(pct_change):
         return 0
 
 
-def momentum_quality(ts, min_inf_discr=0.0):
-    # use momentum quality calculation
-
-    df = pd.DataFrame()
-    lookback_months = 12
-
-    df["return"] = ts.resample("ME").last().pct_change()[-lookback_months:-1]
-    if not len(df["return"]):
-        return False, False
-
-    df["pos_neg"] = df.apply(lambda row: _pos_neg(row["return"]), axis=1)
-    df["pos_sum"] = df["pos_neg"].cumsum()
-
-    positive_sum = 0
-    if len(df["pos_sum"]) > 0:
-        positive_sum = df["pos_sum"].iloc[-1]
-        consist_indicator = df["pos_sum"].iloc[-1] >= lookback_months * 2 / 3
-
-    if positive_sum == 0:
-        pos_percent = 0
-        neg_percent = 1
-    elif positive_sum >= lookback_months - 1:
-        pos_percent = 1
-        neg_percent = 0
-    else:
-        pos_percent, neg_percent = df["pos_neg"].value_counts(normalize=True)
-    perc_diff = neg_percent - pos_percent
-
-    pret = ((df["return"] + 1).cumprod() - 1).iloc[-1]
-    inf_discr = np.sign(pret) * perc_diff
-    if inf_discr < float(min_inf_discr) and consist_indicator:
-        return inf_discr, True
-
-    return inf_discr, False
-
-
 def momentum_score(ts, trading_days=252):
     """
     Input:  Price time series.
@@ -301,18 +265,6 @@ def history(engine, db_session, tickers, days):
     df = df.set_index("date")
 
     return df
-
-
-def TMOM(prices_df):
-    return prices_df.pct_change().cumsum().tail(1)[0]
-
-
-def High52Week(price_df):
-    return price_df["close"].rolling(window=52 * 7, min_periods=1).max()[0]
-
-
-def NearHigh(price_df):
-    return price_df["close"].tail(1).iloc[0] / High52Week(price_df)
 
 
 def share_quantity(price, weight, portfolio_value):

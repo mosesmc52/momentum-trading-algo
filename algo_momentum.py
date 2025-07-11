@@ -19,9 +19,7 @@ from SES import AmazonSES
 sentry_sdk.init(dsn=os.getenv("SENTRY_DSN"))
 
 from helper import (
-    NearHigh,
     history,
-    momentum_quality,
     momentum_score,
     parse_wiki_sp_consituents,
     share_quantity,
@@ -78,12 +76,6 @@ is_bull_market = (
     market_history["close"].tail(1).iloc[0] > market_history["close"].mean()
 )
 
-# this value measures the difference between the current price of the market and the average of the history that is retrieved
-# which is TRADING_DAYS_IN_YEAR. If the value is positive the price of the market is below the mean of the market and
-# is in a bear state
-latest_price = market_history["close"].iloc[-1]
-market_mean = market_history["close"].mean()
-market_mean_percent_difference = 1 - (latest_price / market_mean)
 
 if is_bull_market:
     log("Bull Market", "success")
@@ -105,15 +97,6 @@ for company in companies:
     )
     if not len(equity_history):
         log("{0}, no data".format(company["Symbol"]))
-        continue
-
-    if equity_history["close"].tail(1).iloc[0] >= float(
-        config["model"]["max_allowable_price"]
-    ):
-        log(
-            "{0} greater than max allowable price, skipping".format(company["Symbol"]),
-            "warning",
-        )
         continue
 
     # check if stock traded > 100 day MA
@@ -146,13 +129,6 @@ for company in companies:
         )
         continue
 
-    inf_discr, is_quality = momentum_quality(
-        equity_history["close"], min_inf_discr=config["model"]["min_inf_discr"]
-    )
-    if not is_quality:
-        log("{0}, quality failed".format(company["Symbol"]))
-        continue
-
     slope_window_days = int(config["model"]["slope_window_days"])
     data_end = len(equity_history)
 
@@ -165,12 +141,7 @@ for company in companies:
     mom_equities_data.append(
         {
             "ticker": company["Symbol"],
-            "inf_discr": inf_discr,
             "score": score,
-            "near_high": NearHigh(equity_history),
-            "volatility": volatility(
-                equity_history["close"], vola_window=int(config["model"]["vola_window"])
-            ),
         },
     )
 
@@ -186,9 +157,7 @@ if "ticker" not in mom_equities.columns:
 
 mom_equities = mom_equities.set_index(["ticker"])
 
-ranking_table = mom_equities.sort_values(
-    by=["volatility", "inf_discr", "score"], ascending=[True, True, False]
-)
+ranking_table = mom_equities.sort_values(by=["score"], ascending=[False])
 
 log("Ranking Table", "success")
 if str2bool(os.getenv("VERBOSE", False)):
@@ -241,7 +210,7 @@ for ticker, _ in new_portfolio.iterrows():
             "volatility": volatility(
                 equity_history["close"], vola_window=int(config["model"]["vola_window"])
             ),
-            "price": equity_history.tail(1)["close"][0],
+            "price": equity_history["close"].tail(1).iloc[0],
         },
     )
 
@@ -349,24 +318,17 @@ if is_bull_market:
         print(f"position size: {positions}")
 
 else:
-    if (
-        market_mean_percent_difference
-        > config["model"]["maximum_market_mean_percent_difference"]
-    ):
-        for position in kept_positions:
-            if LIVE_TRADE:
-                api.submit_order(
-                    symbol=position,
-                    time_in_force="day",
-                    side=SELL,
-                    type="market",
-                    qty=api.get_position(position).qty,
-                )
-            log(f"drop position {position}", "info")
-    else:
-        if str2bool(os.getenv("VERBOSE", False)):
-            print(f"portfolio size: {len(kept_positions)}")
-        updated_positions = kept_positions
+
+    for position in kept_positions:
+        if LIVE_TRADE:
+            api.submit_order(
+                symbol=position,
+                time_in_force="day",
+                side=SELL,
+                type="market",
+                qty=api.get_position(position).qty,
+            )
+        log(f"drop position {position}", "info")
 
 
 if market_weight:
