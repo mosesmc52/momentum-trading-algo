@@ -20,7 +20,7 @@ echo "start" >> /var/log/cron.log 2>&1
 # Setup a cron schedule to run 1st of every month
 echo "SHELL=/bin/bash
 BASH_ENV=/container.env
-0 0 1 * * cd /app/ && python ingest.py; python algo_momentum.py && /var/log/cron.log 2>&1
+0 0 * * 3  cd /app && python ingest.py && python algo_momentum.py >> /var/log/cron.log 2>&1
 # This extra line makes it a valid cron" > scheduler.txt
 
 crontab scheduler.txt

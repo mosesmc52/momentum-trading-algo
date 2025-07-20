@@ -96,7 +96,7 @@ market_history = history(
     engine=engine,
     db_session=db_session,
     tickers=[config["model"]["market"]],
-    days=config["model"]["trend_window_days"],
+    trading_days=config["model"]["trend_window_days"],
 )
 
 is_bull_market = (
@@ -121,7 +121,7 @@ for company in companies:
         engine=engine,
         db_session=db_session,
         tickers=[company["Symbol"]],
-        days=TRADING_DAYS_IN_YEAR,
+        trading_days=TRADING_DAYS_IN_YEAR,
     )
     if not len(equity_history):
         log("{0}, no data".format(company["Symbol"]))
@@ -226,7 +226,7 @@ for ticker, _ in new_portfolio.iterrows():
         engine=engine,
         db_session=db_session,
         tickers=[ticker],
-        days=TRADING_DAYS_IN_YEAR,
+        trading_days=TRADING_DAYS_IN_YEAR,
     )
 
     position_volatility_data.append(

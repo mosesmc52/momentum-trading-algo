@@ -15,6 +15,7 @@ from alpaca_trade_api.rest import TimeFrame
 from dateutil import parser as time_parser
 from log import log
 from lxml import html
+from pandas.tseries.offsets import BDay
 from scipy import stats
 from sqlalchemy.sql import text
 
@@ -38,6 +39,28 @@ def str2bool(value):
         return valid[lower_value]
     else:
         raise ValueError('invalid literal for boolean: "%s"' % value)
+
+
+def last_trading_day_of_week(ref_date=None):
+    """
+    Returns the last trading day (Friday) of the current week based on ref_date.
+    If today is a weekend (Saturday or Sunday), returns the previous Friday.
+    """
+    if ref_date is None:
+        ref_date = datetime.now()
+
+    weekday = ref_date.weekday()  # Monday=0, Sunday=6
+
+    if weekday >= 5:
+        # Saturday (5) or Sunday (6): go back to last Friday
+        days_to_subtract = weekday - 4
+        last_friday = ref_date - timedelta(days=days_to_subtract)
+    else:
+        # Weekday: compute Friday of current week
+        days_to_add = 4 - weekday
+        last_friday = ref_date + timedelta(days=days_to_add)
+
+    return last_friday.date()
 
 
 def parse_wiki_sp_consituents(sources=[]):
@@ -151,23 +174,33 @@ def price_history(api, ticker, start_date, end_date, print_test=False):
     return []
 
 
-def ingest_security(alpaca_api, db_session, ticker, name="", type="stock"):
+def ingest_security(
+    alpaca_api, db_session, ticker, name="", type="stock", trading_days=252 * 2
+):
     now = datetime.now()
-    end_date = now - timedelta(hours=48)
+    # Use last trading day of the current week as end_date
+    end_date = last_trading_day_of_week(ref_date=now)
+    # Convert to datetime at market close time (e.g., 16:00) for consistency if needed
+    # Here, assuming you want midnight of that day:
+    end_date = datetime.combine(end_date, datetime.min.time())
 
-    log("\n{0}".format(ticker), "success")
-    # insert security in database if doesn't exist
+    log(f"\n{ticker}", "success")
+
+    # insert security in database if it doesn't exist
     security = (
         db_session.query(models.Security)
         .filter(models.Security.ticker == ticker)
         .first()
     )
     if not security:
-        security = models.Security(ticker=ticker, name=name, type=type)
+        security = models.Security(ticker=ticker, name=name, type="stock")
         db_session.add(security)
         db_session.commit()
-        start_date = now - timedelta(days=730)
+        # Approximate calendar days for trading_days (e.g. 252 trading days ≈ 365 calendar days)
+        # Set start_date some days back from end_date (you may want to implement a function to get trading days back)
+        start_date = end_date - timedelta(days=int(trading_days * 1.5))
     else:
+        # retrieve latest price data from sql database
         last_price = (
             db_session.query(models.Price)
             .filter(models.Price.security_id == security.id)
@@ -175,32 +208,15 @@ def ingest_security(alpaca_api, db_session, ticker, name="", type="stock"):
             .first()
         )
         if not last_price:
-            start_date = now - timedelta(days=730)
+            start_date = end_date - timedelta(days=int(trading_days * 1.5))
         else:
             start_date = last_price.date + timedelta(days=1)
-            if start_date > now:
+            if start_date > end_date:
                 return True
 
-    # retrieve price history since latest price
     if start_date > end_date:
         log("0 day prices inserted", "info")
         return True
-
-    hist = price_history(alpaca_api, ticker, start_date, end_date)
-
-    for price in hist:
-
-        object = models.Price(
-            close=price.c,  # retrieve close price
-            date=time_parser.parse(str(price.t)),
-            security_id=security.id,
-        )
-        db_session.add(object)
-        db_session.commit()
-
-    log("{0} day prices inserted".format(len(hist)))
-
-    return True
 
 
 def _pos_neg(pct_change):
@@ -236,19 +252,22 @@ def volatility(ts, vola_window=20):
     return ts.pct_change().rolling(vola_window).std().mean()
 
 
-def history(engine, db_session, tickers, days):
+def history(engine, db_session, tickers, trading_days):
+    # Step 1: Query securities by ticker
     security_query = db_session.query(models.Security).filter(
         models.Security.ticker.in_(tuple(tickers))
     )
-
     security_ids = [s.id for s in security_query.all()]
 
-    past = datetime.now() - timedelta(days=int(days))
+    # Step 2: Subtract trading days using BDay (business days)
+    past = datetime.now() - BDay(int(trading_days))
+
+    # Step 3: Query prices after `past` date
     price_query = db_session.query(models.Price).filter(
         models.Price.security_id.in_(tuple(security_ids)), models.Price.date >= past
     )
 
-    # Convert queries to raw SQL strings using text()
+    # Step 4: Compile to raw SQL strings
     security_sql = str(
         security_query.statement.compile(compile_kwargs={"literal_binds": True})
     )
@@ -256,6 +275,7 @@ def history(engine, db_session, tickers, days):
         price_query.statement.compile(compile_kwargs={"literal_binds": True})
     )
 
+    # Step 5: Execute SQL queries and merge data
     security_df = pd.read_sql(text(security_sql), con=engine)
     price_df = pd.read_sql(text(price_sql), con=engine)
 
