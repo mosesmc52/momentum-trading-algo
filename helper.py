@@ -218,6 +218,23 @@ def ingest_security(
         log("0 day prices inserted", "info")
         return True
 
+    # Call price_history here (make sure it accepts datetime or date objects as arguments)
+    hist = price_history(alpaca_api, ticker, start_date, end_date)
+
+    for price in hist:
+        db_session.add(
+            models.Price(
+                close=price.c,  # retrieve close price
+                date=time_parser.parse(str(price.t)),
+                security_id=security.id,
+            )
+        )
+    db_session.commit()
+
+    log(f"{len(hist)} day prices inserted")
+
+    return True
+
 
 def _pos_neg(pct_change):
     if pct_change > 0:
