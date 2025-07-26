@@ -1,22 +1,35 @@
 #!/bin/bash
 set -e
 
-echo "Creating cron log..."
+echo "🧱 Creating SQLite DB..."
+python -c '
+from database import init_db
+init_db()
+'
+
+echo "📥 Ingesting equities once..."
+python ingest.py
+
+echo "📝 Creating cron log..."
 touch /var/log/cron.log
 
-echo "Writing scheduler.txt to /app..."
+echo "🌐 Exporting environment..."
+declare -p | grep -Ev 'BASHOPTS|BASH_VERSINFO|EUID|PPID|SHELLOPTS|UID' > /container.env
+
+echo "📆 Writing scheduler..."
 cat <<EOF > /app/scheduler.txt
 SHELL=/bin/bash
+BASH_ENV=/container.env
 PATH=/usr/local/bin:/usr/bin:/bin
-* * * * * echo "Cron job ran at \$(date)" >> /var/log/cron.log 2>&1
+*/5 * * * * cd /app && /usr/bin/python3 ingest.py && /usr/bin/python3 algo_momentum.py >> /var/log/cron.log 2>&1
 EOF
 
-echo "Installing crontab:"
+echo "📌 Installing crontab:"
 cat /app/scheduler.txt
 crontab /app/scheduler.txt
 
-echo "Crontab after install:"
+echo "📋 Confirming crontab:"
 crontab -l
 
-echo "Starting cron..."
+echo "🚀 Starting cron..."
 cron -f
