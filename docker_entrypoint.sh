@@ -7,6 +7,9 @@ from database import init_db
 init_db()
 '
 
+echo "📥 Ingesting equities once..."
+python ingest.py
+
 echo "📝 Creating cron log..."
 touch /var/log/cron.log
 
@@ -18,7 +21,8 @@ cat <<EOF > /app/scheduler.txt
 SHELL=/bin/bash
 BASH_ENV=/container.env
 PATH=/usr/local/bin:/usr/bin:/bin
-*/5 * * * * cd /app && poetry run python algo_momentum.py >> /var/log/cron.log 2>&1
+0 11 * * 3 cd /app && poetry run python ingest.py && poetry run python algo_momentum.py >> /var/log/cron.log 2>&1
+
 EOF
 
 echo "📌 Installing crontab:"
