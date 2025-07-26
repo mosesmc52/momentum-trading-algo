@@ -1,30 +1,29 @@
 #!/bin/bash
 
-# create sqllitedb
+# create SQLite DB
 echo "create sqllitedb"
 python -c '
-from database import ( init_db )
+from database import init_db
 init_db()
 '
+
 # ingest Equities
 echo "ingest stock equities"
 python ingest.py
 
-# Start the run once job.
-echo "Momentum Algo Docker container has been started"
-
+# Write env
 declare -p | grep -Ev 'BASHOPTS|BASH_VERSINFO|EUID|PPID|SHELLOPTS|UID' > /container.env
 
-echo "start" >> /var/log/cron.log 2>&1
+# Create log file early
+touch /var/log/cron.log
 
-# Setup a cron schedule to run 1st of every month
+# Write cron schedule
 echo "SHELL=/bin/bash
 BASH_ENV=/container.env
-0 0 * * 3  cd /app && python ingest.py && python algo_momentum.py >> /var/log/cron.log 2>&1
-# This extra line makes it a valid cron" > scheduler.txt
+PATH=/usr/local/bin:/usr/bin:/bin
+*/15 * * * * cd /app && /usr/bin/python3 ingest.py && /usr/bin/python3 algo_momentum.py >> /var/log/cron.log 2>&1
+" > scheduler.txt
 
+# Set and start cron
 crontab scheduler.txt
-cron
-
-touch /var/log/cron.log
-echo "running....."
+cron -f
