@@ -28,4 +28,4 @@ ADD docker_entrypoint.sh /docker_entrypoint.sh
 
 RUN touch /var/log/cron.log
 
-ENTRYPOINT /docker_entrypoint.sh && tail -f /var/log/cron.log
+CMD ["/docker_entrypoint.sh"]

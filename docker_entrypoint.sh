@@ -1,4 +1,5 @@
 #!/bin/bash
+set -e
 
 # create SQLite DB
 echo "create sqllitedb"
@@ -11,19 +12,21 @@ init_db()
 echo "ingest stock equities"
 python ingest.py
 
-# Write env
-declare -p | grep -Ev 'BASHOPTS|BASH_VERSINFO|EUID|PPID|SHELLOPTS|UID' > /container.env
-
 # Create log file early
 touch /var/log/cron.log
+
+# Export environment
+declare -p | grep -Ev 'BASHOPTS|BASH_VERSINFO|EUID|PPID|SHELLOPTS|UID' > /container.env
 
 # Write cron schedule
 echo "SHELL=/bin/bash
 BASH_ENV=/container.env
-PATH=/usr/local/bin:/usr/bin:/bin
+PATH=$PATH
 */15 * * * * cd /app && /usr/bin/python3 ingest.py && /usr/bin/python3 algo_momentum.py >> /var/log/cron.log 2>&1
 " > scheduler.txt
 
-# Set and start cron
+# Install cron job
 crontab scheduler.txt
-cron -f
+
+# Start cron in foreground
+cron && tail -f /var/log/cron.log
