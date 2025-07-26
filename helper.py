@@ -179,7 +179,7 @@ def ingest_security(
 ):
     now = datetime.now()
     # Use last trading day of the current week as end_date
-    end_date = last_trading_day_of_week(ref_date=now)
+    end_date = last_trading_day_of_week(ref_date=now) - timedelta(days=1)
     # Convert to datetime at market close time (e.g., 16:00) for consistency if needed
     # Here, assuming you want midnight of that day:
     end_date = datetime.combine(end_date, datetime.min.time())
