@@ -178,10 +178,11 @@ def ingest_security(
     alpaca_api, db_session, ticker, name="", type="stock", trading_days=252 * 2
 ):
     now = datetime.now()
-    # Use last trading day of the current week as end_date
-    end_date = last_trading_day_of_week(ref_date=now) - timedelta(days=1)
-    # Convert to datetime at market close time (e.g., 16:00) for consistency if needed
-    # Here, assuming you want midnight of that day:
+    # Never request future bars; cap the weekly rebalance anchor at the latest completed
+    # business day available at runtime.
+    weekly_end_date = last_trading_day_of_week(ref_date=now) - timedelta(days=1)
+    latest_completed_trading_day = (pd.Timestamp(now).normalize() - BDay(1)).date()
+    end_date = min(weekly_end_date, latest_completed_trading_day)
     end_date = datetime.combine(end_date, datetime.min.time())
 
     log(f"\n{ticker}", "success")
@@ -266,7 +267,14 @@ def momentum_score(ts, trading_days=252):
 
 
 def volatility(ts, vola_window=20):
-    return ts.pct_change().rolling(vola_window).std().mean()
+    if len(ts) < vola_window:
+        return np.nan
+
+    value = ts.pct_change().rolling(vola_window).std().mean()
+    if pd.isna(value) or value <= 0:
+        return np.nan
+
+    return value
 
 
 def history(engine, db_session, tickers, trading_days):
@@ -275,6 +283,8 @@ def history(engine, db_session, tickers, trading_days):
         models.Security.ticker.in_(tuple(tickers))
     )
     security_ids = [s.id for s in security_query.all()]
+    if not security_ids:
+        return pd.DataFrame()
 
     # Step 2: Subtract trading days using BDay (business days)
     past = datetime.now() - BDay(int(trading_days))
@@ -295,11 +305,13 @@ def history(engine, db_session, tickers, trading_days):
     # Step 5: Execute SQL queries and merge data
     security_df = pd.read_sql(text(security_sql), con=engine)
     price_df = pd.read_sql(text(price_sql), con=engine)
+    if security_df.empty or price_df.empty:
+        return pd.DataFrame()
 
     df = security_df.merge(price_df, left_on="id", right_on="security_id")
     df = df.drop(columns=["security_id", "id_x", "id_y"])
     df["date"] = pd.to_datetime(df["date"])
-    df = df.set_index("date")
+    df = df.sort_values(["ticker", "date"]).set_index("date")
 
     return df
 
