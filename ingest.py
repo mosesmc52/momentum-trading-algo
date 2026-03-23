@@ -4,16 +4,14 @@ import pandas as pd
 import requests
 import sqlalchemy
 from dotenv import find_dotenv, load_dotenv
+from alpaca_adapter import AlpacaAPI
 
 load_dotenv(find_dotenv())
 
-import alpaca_trade_api as tradeapi
-from alpaca_trade_api.rest import TimeFrame
-
-alpaca_api = tradeapi.REST(
+alpaca_api = AlpacaAPI.from_env(
     os.getenv("ALPACA_KEY_ID"),
     os.getenv("ALPACA_SECRET_KEY"),
-    base_url=os.getenv("ALPACA_BASE_URL"),
+    paper="paper" in os.getenv("ALPACA_BASE_URL", "").lower(),
 )
 
 from helper import ingest_security, parse_wiki_sp_consituents

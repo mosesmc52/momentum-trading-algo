@@ -5,19 +5,28 @@ Helper functions.
 import math
 import time
 from datetime import datetime, timedelta
+from typing import Optional
 
 import models
 import numpy as np
 import pandas as pd
 import requests
 import sqlalchemy
-from alpaca_trade_api.rest import TimeFrame
+from alpaca.data.timeframe import TimeFrame
 from dateutil import parser as time_parser
 from log import log
 from lxml import html
 from pandas.tseries.offsets import BDay
 from scipy import stats
 from sqlalchemy.sql import text
+
+WIKIPEDIA_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/123.0.0.0 Safari/537.36"
+    )
+}
 
 
 def str2bool(value):
@@ -63,14 +72,23 @@ def last_trading_day_of_week(ref_date=None):
     return last_friday.date()
 
 
+def _fetch_html_tree(url: str, *, timeout: int = 30, headers: Optional[dict] = None):
+    response = requests.get(
+        url,
+        headers=headers or WIKIPEDIA_HEADERS,
+        timeout=timeout,
+    )
+    response.raise_for_status()
+    return html.fromstring(response.text)
+
+
 def parse_wiki_sp_consituents(sources=[]):
     companies = []
     if "500" in sources:
         log("\nParsing S&P 500 Large-Cap Wiki Constituents", "info")
-        response = requests.get(
+        mainTree = _fetch_html_tree(
             "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
         )
-        mainTree = html.fromstring(response.text)
 
         companies500 = []
         for row in mainTree.xpath('//table[contains(@id, "constituents")]/tbody/tr'):
@@ -92,10 +110,9 @@ def parse_wiki_sp_consituents(sources=[]):
 
     if "400" in sources:
         log("\nParsing S&P 400 Mid-Cap Wiki Constituents", "info")
-        response = requests.get(
+        mainTree = _fetch_html_tree(
             "https://en.wikipedia.org/wiki/List_of_S%26P_400_companies"
         )
-        mainTree = html.fromstring(response.text)
 
         companies400 = []
         for row in mainTree.xpath('//table[contains(@id, "constituents")]/tbody/tr'):
@@ -117,10 +134,9 @@ def parse_wiki_sp_consituents(sources=[]):
 
     if "600" in sources:
         log("\nParsing S&P 600 Small-Cap Wiki Constituents", "info")
-        response = requests.get(
+        mainTree = _fetch_html_tree(
             "https://en.wikipedia.org/wiki/List_of_S%26P_600_companies"
         )
-        mainTree = html.fromstring(response.text)
 
         companies600 = []
         for row in mainTree.xpath('//table[contains(@id, "constituents")]/tbody/tr'):
@@ -141,10 +157,9 @@ def parse_wiki_sp_consituents(sources=[]):
         companies += companies600
     if "aristocrats" in sources:
         log("\nParsing S&P 500 Dividend Aristocrats", "info")
-        response = requests.get(
+        mainTree = _fetch_html_tree(
             "https://en.wikipedia.org/wiki/S%26P_500_Dividend_Aristocrats"
         )
-        mainTree = html.fromstring(response.text)
 
         companiesAristocrats = []
         for row in mainTree.xpath('//table[contains(@id, "constituents")]/tbody/tr'):

@@ -2,11 +2,11 @@ import configparser
 import os
 from datetime import datetime, timedelta
 
-import alpaca_trade_api as tradeapi
 import models
 import numpy as np
 import pandas as pd
 import sqlalchemy
+from alpaca_adapter import AlpacaAPI
 from dotenv import find_dotenv, load_dotenv
 from fredapi import Fred
 
@@ -64,11 +64,11 @@ LIVE_TRADE = str2bool(os.getenv("LIVE_TRADE", False))
 log(f"Running in {'LIVE' if LIVE_TRADE else 'TEST'} mode", "info")
 
 # initialize Alpaca Trader
-api = tradeapi.REST(
+api = AlpacaAPI.from_env(
     os.getenv("ALPACA_KEY_ID"),
     os.getenv("ALPACA_SECRET_KEY"),
-    base_url=os.getenv("ALPACA_BASE_URL"),
-)  # or use ENV Vars shown below
+    paper="paper" in os.getenv("ALPACA_BASE_URL", "").lower(),
+)
 account = api.get_account()
 
 # retrieve all tradable positions
