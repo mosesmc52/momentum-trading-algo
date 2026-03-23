@@ -2,11 +2,11 @@ import configparser
 import os
 from datetime import datetime, timedelta
 
-import alpaca_trade_api as tradeapi
 import models
 import numpy as np
 import pandas as pd
 import sqlalchemy
+from alpaca_adapter import AlpacaAPI
 from dotenv import find_dotenv, load_dotenv
 from fredapi import Fred
 
@@ -34,6 +34,7 @@ from log import log
 TRADING_DAYS_IN_YEAR = 252
 BUY = "buy"
 SELL = "sell"
+HOLD = "hold"
 
 # load macro-economic event check for bull market
 fred = Fred(api_key=os.getenv("FRED_API_KEY"))
@@ -63,11 +64,11 @@ LIVE_TRADE = str2bool(os.getenv("LIVE_TRADE", False))
 log(f"Running in {'LIVE' if LIVE_TRADE else 'TEST'} mode", "info")
 
 # initialize Alpaca Trader
-api = tradeapi.REST(
+api = AlpacaAPI.from_env(
     os.getenv("ALPACA_KEY_ID"),
     os.getenv("ALPACA_SECRET_KEY"),
-    base_url=os.getenv("ALPACA_BASE_URL"),
-)  # or use ENV Vars shown below
+    paper="paper" in os.getenv("ALPACA_BASE_URL", "").lower(),
+)
 account = api.get_account()
 
 # retrieve all tradable positions
@@ -99,8 +100,19 @@ market_history = history(
     trading_days=config["model"]["trend_window_days"],
 )
 
+trend_window_days = int(config["model"]["trend_window_days"])
+slope_window_days = int(config["model"]["slope_window_days"])
+portfolio_size = int(config["model"]["portfolio_size"])
+vola_window = int(config["model"]["vola_window"])
+max_stock_gap = float(config["model"]["max_stock_gap"])
+minimum_score_momentum = float(config["model"]["minimum_score_momentum"])
+
+if market_history.empty or len(market_history) < trend_window_days:
+    log("Insufficient market history for regime check. Exiting.", "error")
+    exit(1)
+
 is_bull_market = (
-    market_history["close"].tail(1).iloc[0] > market_history["close"].mean()
+    market_history["close"].tail(1).iloc[0] > market_history["close"].tail(trend_window_days).mean()
     and MACRO_YOY > 0.0
 )
 
@@ -127,6 +139,16 @@ for company in companies:
         log("{0}, no data".format(company["Symbol"]))
         continue
 
+    minimum_history = max(100, slope_window_days, vola_window)
+    if len(equity_history) < minimum_history:
+        log(
+            "{0}, insufficient history ({1} < {2}), skipping".format(
+                company["Symbol"], len(equity_history), minimum_history
+            ),
+            "warning",
+        )
+        continue
+
     # check if stock traded > 100 day MA
     if (
         equity_history["close"].tail(1).iloc[0]
@@ -143,22 +165,22 @@ for company in companies:
     # if stock moved > 15% in the past 90 days remove
     returns = (
         equity_history["close"][
-            len(equity_history["close"]) - int(config["model"]["slope_window_days"]) :
+            len(equity_history["close"]) - slope_window_days :
         ]
         .pct_change()
         .abs()
     )
-    if len(returns[(returns > float(config["model"]["max_stock_gap"]))]):
+    if len(returns[(returns > max_stock_gap)]):
         log(
             "{0} moved greater than 15% in the past {1} days, skipping".format(
-                company["Symbol"], config["model"]["slope_window_days"]
+                company["Symbol"], slope_window_days
             ),
             "warning",
         )
         continue
 
     score = momentum_score(equity_history["close"])
-    if score <= float(config["model"]["minimum_score_momentum"]):
+    if pd.isna(score) or score <= minimum_score_momentum:
         log("{0}, score {1} less than minimum".format(company["Symbol"], score))
         continue
 
@@ -190,13 +212,15 @@ if str2bool(os.getenv("VERBOSE", False)):
 
 kept_positions = []
 today = datetime.now()
+target_portfolio = ranking_table.head(portfolio_size)
+target_tickers = target_portfolio.index.tolist()
 
 for position in api.list_positions():
     if position.symbol in not_tradeable_positions:
         log("{0} is not tradable, skipping".format(position.symbol), "error")
         continue
 
-    if position.symbol not in mom_equities.index.tolist():
+    if position.symbol not in target_tickers:
         if LIVE_TRADE:
             api.submit_order(
                 symbol=position.symbol,
@@ -209,53 +233,79 @@ for position in api.list_positions():
     else:
         kept_positions.append(position.symbol)
 
-replacement_stocks = int(config["model"]["portfolio_size"]) - len(kept_positions)
+replacement_stocks = portfolio_size - len(kept_positions)
 
-buy_list = ranking_table.loc[~ranking_table.index.isin(kept_positions)][
-    :replacement_stocks
-]
+buy_list = target_portfolio.loc[
+    ~target_portfolio.index.isin(kept_positions)
+].head(max(replacement_stocks, 0))
 
 new_portfolio = pd.concat(
-    (buy_list, ranking_table.loc[ranking_table.index.isin(kept_positions)])
+    (buy_list, target_portfolio.loc[target_portfolio.index.isin(kept_positions)])
 )
 
-# calculate equity inverse volatility
-position_volatility_data = []
-for ticker, _ in new_portfolio.iterrows():
-    equity_history = history(
-        engine=engine,
-        db_session=db_session,
-        tickers=[ticker],
-        trading_days=TRADING_DAYS_IN_YEAR,
-    )
+position_volatility = pd.DataFrame()
+if is_bull_market:
+    # calculate equity inverse volatility
+    position_volatility_data = []
+    for ticker, _ in new_portfolio.iterrows():
+        equity_history = history(
+            engine=engine,
+            db_session=db_session,
+            tickers=[ticker],
+            trading_days=TRADING_DAYS_IN_YEAR,
+        )
+        if equity_history.empty or len(equity_history) < vola_window:
+            log(
+                f"{ticker} has insufficient history for volatility sizing, skipping",
+                "warning",
+            )
+            continue
 
-    position_volatility_data.append(
-        {
-            "ticker": ticker,
-            "volatility": volatility(
-                equity_history["close"], vola_window=int(config["model"]["vola_window"])
-            ),
-            "price": equity_history["close"].tail(1).iloc[0],
-        },
-    )
+        security_volatility = volatility(equity_history["close"], vola_window=vola_window)
+        if pd.isna(security_volatility) or security_volatility <= 0:
+            log(f"{ticker} has invalid volatility for sizing, skipping", "warning")
+            continue
 
+        position_volatility_data.append(
+            {
+                "ticker": ticker,
+                "volatility": security_volatility,
+                "price": equity_history["close"].tail(1).iloc[0],
+            },
+        )
 
-# calculate weights
-position_volatility = pd.DataFrame(position_volatility_data).set_index("ticker")
-inv_vola = 1 / position_volatility["volatility"]
-sum_inv_vola = np.sum(inv_vola)
-position_volatility["weight"] = inv_vola / sum_inv_vola
+    if not position_volatility_data:
+        log("No positions available for valid volatility sizing. Exiting.", "error")
+        exit(1)
+
+    position_volatility = pd.DataFrame(position_volatility_data).set_index("ticker")
+    inv_vola = 1 / position_volatility["volatility"]
+    sum_inv_vola = np.sum(inv_vola)
+    position_volatility["weight"] = inv_vola / sum_inv_vola
 
 
 def process_position(security, data, is_existing_position, current_qty=0):
-    qty = share_quantity(
+    target_qty = share_quantity(
         price=data["price"],
         weight=data["weight"],
         portfolio_value=portfolio_value,
     )
 
-    if qty:
-        diff = qty - current_qty if is_existing_position else qty
+    diff = target_qty - current_qty if is_existing_position else target_qty
+
+    if is_existing_position and diff == 0:
+        updated_positions.append(
+            {
+                "security": security,
+                "action": HOLD,
+                "qty": target_qty,
+                "diff": 0,
+            }
+        )
+        log(f"{security}: hold {target_qty}", "info")
+        return target_qty
+
+    if target_qty > 0:
         if LIVE_TRADE:
             if is_existing_position:
                 if diff > 0:
@@ -280,35 +330,41 @@ def process_position(security, data, is_existing_position, current_qty=0):
                     time_in_force="day",
                     side=BUY,
                     type="market",
-                    qty=qty,
-                )
+                        qty=target_qty,
+                    )
 
-        if is_existing_position:
-            action = BUY if diff > 0 else SELL
-        else:
-            action = BUY
+        action = BUY if diff > 0 or not is_existing_position else SELL
 
         updated_positions.append(
             {
                 "security": security,
                 "action": action,
-                "qty": qty,
+                "qty": target_qty,
                 "diff": diff,
             }
         )
-        log(f"{security}: {qty}", "info")
+        log(f"{security}: {target_qty}", "info")
     else:
+        if is_existing_position and current_qty > 0 and LIVE_TRADE:
+            api.submit_order(
+                symbol=security,
+                time_in_force="day",
+                side=SELL,
+                type="market",
+                qty=current_qty,
+            )
+
         updated_positions.append(
             {
                 "security": security,
-                "action": BUY,
+                "action": SELL if is_existing_position and current_qty > 0 else HOLD,
                 "qty": 0,
                 "diff": -current_qty if is_existing_position else 0,
             }
         )
         log(f"{security}: 0", "warning")
 
-    return qty
+    return target_qty
 
 
 # Main bull market execution
@@ -343,8 +399,7 @@ if is_bull_market:
         print(f"position size: {positions}")
 
 else:
-
-    for position in kept_positions:
+    for position in current_positions:
         if LIVE_TRADE:
             api.submit_order(
                 symbol=position,
